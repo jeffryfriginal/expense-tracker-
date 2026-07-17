@@ -31,6 +31,45 @@
     padding: 32px 16px 64px;
   }
 
+  .login-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .login-box {
+    background: var(--paper);
+    padding: 32px;
+    border-radius: 6px;
+    width: 280px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.35);
+  }
+  .login-box input {
+    margin-bottom: 12px;
+  }
+  .login-box button {
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 10px 0;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .login-box button:disabled { opacity: 0.5; cursor: default; }
+  .login-error {
+    color: var(--expense);
+    font-size: 12px;
+    margin-top: 10px;
+    min-height: 14px;
+  }
+
   .sheet {
     max-width: 780px;
     margin: 0 auto;
@@ -419,7 +458,17 @@
 
 <div id="configWarning"></div>
 
-<div class="sheet">
+<div class="login-screen" id="loginScreen">
+  <form class="login-box" id="loginForm">
+    <h1 style="font-family:'Fraunces',serif;font-size:22px;margin:0 0 4px;">Ledger</h1>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:18px;">Enter password to view</div>
+    <input type="password" id="loginPassword" placeholder="Password" autocomplete="off" required>
+    <button type="submit" id="loginSubmitBtn">Unlock</button>
+    <div class="login-error" id="loginError"></div>
+  </form>
+</div>
+
+<div class="sheet" id="mainContent" style="display:none;">
   <header>
     <div>
       <h1>Ledger</h1>
@@ -656,17 +705,15 @@ showAllBtn.addEventListener('click', () => {
 
 let recordSeq = 0;
 
-async function loadRecords() {
-  if (!checkConfig()) return;
-  try {
-    const res = await fetch(SCRIPT_URL);
-    const data = await res.json();
-    records = data.records || [];
-    records.forEach(r => { r._seq = recordSeq++; });
-    render();
-  } catch (err) {
-    recordsBody.innerHTML = '<tr class="empty-row"><td colspan="5">Error loading data.</td></tr>';
+async function loadRecords(password) {
+  const res = await fetch(SCRIPT_URL + '?password=' + encodeURIComponent(password));
+  const data = await res.json();
+  if (data.error) {
+    throw new Error(data.error);
   }
+  records = data.records || [];
+  records.forEach(r => { r._seq = recordSeq++; });
+  render();
 }
 
 const PAGE_SIZE = 20;
@@ -855,7 +902,43 @@ document.getElementById('calcUseBtn').addEventListener('click', () => {
 dateInput.valueAsDate = new Date();
 setKind('expense');
 populateFilterCategories();
-loadRecords();
+
+// ---- Login gate: nothing is fetched until this succeeds ----
+let sessionPassword = null; // held only in memory for this tab; never saved anywhere
+
+const loginForm = document.getElementById('loginForm');
+const loginScreen = document.getElementById('loginScreen');
+const loginPassword = document.getElementById('loginPassword');
+const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+const loginError = document.getElementById('loginError');
+const mainContent = document.getElementById('mainContent');
+
+if (!checkConfig()) {
+  loginSubmitBtn.disabled = true;
+  loginPassword.disabled = true;
+} else {
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loginSubmitBtn.disabled = true;
+    loginSubmitBtn.textContent = 'Checking…';
+    loginError.textContent = '';
+
+    const typed = loginPassword.value;
+    try {
+      await loadRecords(typed);
+      sessionPassword = typed; // now usable for add/edit calls this session
+      loginScreen.style.display = 'none';
+      mainContent.style.display = 'block';
+    } catch (err) {
+      loginError.textContent = 'Wrong password.';
+      loginPassword.value = '';
+      loginPassword.focus();
+    } finally {
+      loginSubmitBtn.disabled = false;
+      loginSubmitBtn.textContent = 'Unlock';
+    }
+  });
+}
 </script>
 </body>
 </html>
