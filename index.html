@@ -104,9 +104,27 @@
 
   .tally {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr auto;
     border-bottom: 1px solid var(--line);
   }
+
+  .tally-eye-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 20px;
+  }
+  .eye-toggle {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .eye-toggle:hover { border-color: var(--ink); color: var(--ink); }
 
   .tally-item {
     padding: 16px 24px;
@@ -489,6 +507,9 @@
       <div class="tally-label">Net</div>
       <div class="tally-value" id="totalNet">₱0.00</div>
     </div>
+    <div class="tally-item tally-eye-item">
+      <button type="button" class="eye-toggle" id="eyeToggle" title="Show amounts" aria-label="Show amounts">👁</button>
+    </div>
   </div>
 
   <form id="entryForm">
@@ -605,6 +626,15 @@ const INCOME_CATEGORIES = ['Church', 'School', 'Other'];
 
 let records = [];
 let currentKind = 'expense';
+let amountsVisible = false; // hidden by default, on every fresh load
+
+const eyeToggle = document.getElementById('eyeToggle');
+eyeToggle.addEventListener('click', () => {
+  amountsVisible = !amountsVisible;
+  eyeToggle.textContent = amountsVisible ? '🙈' : '👁';
+  eyeToggle.title = amountsVisible ? 'Hide amounts' : 'Show amounts';
+  render();
+});
 
 const dateInput = document.getElementById('dateInput');
 const amountInput = document.getElementById('amountInput');
@@ -762,9 +792,9 @@ function render() {
 
   const totalIncome = records.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
   const totalExpense = records.filter(r => r.kind === 'expense').reduce((s, r) => s + Number(r.amount), 0);
-  document.getElementById('totalIncome').textContent = money(totalIncome);
-  document.getElementById('totalExpense').textContent = money(totalExpense);
-  document.getElementById('totalNet').textContent = money(totalIncome - totalExpense);
+  document.getElementById('totalIncome').textContent = amountsVisible ? money(totalIncome) : '₱••••.••';
+  document.getElementById('totalExpense').textContent = amountsVisible ? money(totalExpense) : '₱••••.••';
+  document.getElementById('totalNet').textContent = amountsVisible ? money(totalIncome - totalExpense) : '₱••••.••';
 
   const bar = document.getElementById('filteredTotal');
   if (kindFilter === 'all' && catFilter === 'all') {
