@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1B2430;
+    --paper: #EDEAE2;
+    --paper-dim: #E2DDD0;
+    --line: #C9C2AE;
+    --bg: #12151B;
+    --income: #2F6F4F;
+    --income-bg: #E4EDE7;
+    --expense: #A63D2F;
+    --expense-bg: #F1E4E0;
+    --muted: #7A7263;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 32px 16px 64px;
+  }
+
+  .sheet {
+    max-width: 780px;
+    margin: 0 auto;
+    background: var(--paper);
+    border-radius: 4px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.35);
+    overflow: hidden;
+  }
+
+  header {
+    padding: 28px 32px 20px;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 28px;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .tagline {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .tally {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tally-item {
+    padding: 16px 24px;
+    border-right: 1px solid var(--line);
+  }
+  .tally-item:last-child { border-right: none; }
+
+  .tally-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .tally-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .tally-value.income { color: var(--income); }
+  .tally-value.expense { color: var(--expense); }
+
+  form {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .kind-toggle {
+    display: inline-flex;
+    border: 1.5px solid var(--ink);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .kind-toggle button {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 8px 20px;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .kind-toggle button.active[data-kind="expense"] { background: var(--expense); color: #fff; }
+  .kind-toggle button.active[data-kind="income"] { background: var(--income); color: #fff; }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.4fr auto;
+    gap: 12px;
+    align-items: end;
+  }
+
+  label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+
+  input, select {
+    width: 100%;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: #fff;
+    color: var(--ink);
+  }
+  input:focus, select:focus {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+
+  .add-btn {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 10px 18px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .add-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .status-msg {
+    font-size: 12px;
+    margin-top: 10px;
+    min-height: 16px;
+  }
+  .status-msg.error { color: var(--expense); }
+  .status-msg.ok { color: var(--income); }
+
+  .controls {
+    display: flex;
+    gap: 16px;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--line);
+    background: var(--paper-dim);
+  }
+
+  .controls label { margin-bottom: 4px; }
+  .controls select { min-width: 150px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13.5px;
+  }
+
+  th {
+    text-align: left;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    padding: 10px 32px;
+    border-bottom: 1px solid var(--line);
+  }
+  th.num, td.num { text-align: right; }
+
+  td {
+    padding: 10px 32px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  tr:hover td { background: rgba(0,0,0,0.02); }
+
+  .badge {
+    display: inline-block;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 7px;
+    border-radius: 2px;
+  }
+  .badge.expense { background: var(--expense-bg); color: var(--expense); }
+  .badge.income { background: var(--income-bg); color: var(--income); }
+
+  .amount.expense { color: var(--expense); }
+  .amount.income { color: var(--income); }
+
+  .empty-row td {
+    text-align: center;
+    color: var(--muted);
+    padding: 32px;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .config-warning {
+    margin: 20px 16px 0;
+    max-width: 780px;
+    margin-left: auto;
+    margin-right: auto;
+    background: #F1E4E0;
+    border: 1px solid var(--expense);
+    color: var(--expense);
+    padding: 12px 16px;
+    border-radius: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+  }
+
+  @media (max-width: 640px) {
+    .field-row { grid-template-columns: 1fr; }
+    .tally { grid-template-columns: 1fr; }
+    .tally-item { border-right: none; border-bottom: 1px solid var(--line); }
+    header, form, .controls, th, td { padding-left: 18px; padding-right: 18px; }
+    .controls { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div id="configWarning"></div>
+
+<div class="sheet">
+  <header>
+    <div>
+      <h1>Ledger</h1>
+      <div class="tagline">Personal spending &amp; income</div>
+    </div>
+  </header>
+
+  <div class="tally">
+    <div class="tally-item">
+      <div class="tally-label">Income</div>
+      <div class="tally-value income" id="totalIncome">₱0.00</div>
+    </div>
+    <div class="tally-item">
+      <div class="tally-label">Expenses</div>
+      <div class="tally-value expense" id="totalExpense">₱0.00</div>
+    </div>
+    <div class="tally-item">
+      <div class="tally-label">Net</div>
+      <div class="tally-value" id="totalNet">₱0.00</div>
+    </div>
+  </div>
+
+  <form id="entryForm">
+    <div class="kind-toggle">
+      <button type="button" data-kind="expense" class="active">Expense</button>
+      <button type="button" data-kind="income">Income</button>
+    </div>
+    <div class="field-row">
+      <div>
+        <label for="dateInput">Date</label>
+        <input type="date" id="dateInput" required>
+      </div>
+      <div>
+        <label for="amountInput">Amount (₱)</label>
+        <input type="number" id="amountInput" step="0.01" min="0" placeholder="0.00" required>
+      </div>
+      <div>
+        <label for="categoryInput">Category</label>
+        <select id="categoryInput" required></select>
+      </div>
+      <div>
+        <button type="submit" class="add-btn" id="submitBtn">Add entry</button>
+      </div>
+    </div>
+    <div class="status-msg" id="statusMsg"></div>
+  </form>
+
+  <div class="controls">
+    <div>
+      <label for="filterKind">Show</label>
+      <select id="filterKind">
+        <option value="all">All</option>
+        <option value="expense">Expenses only</option>
+        <option value="income">Income only</option>
+      </select>
+    </div>
+    <div>
+      <label for="filterCategory">Category</label>
+      <select id="filterCategory">
+        <option value="all">All</option>
+      </select>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Kind</th>
+        <th>Category</th>
+        <th class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody id="recordsBody">
+      <tr class="empty-row"><td colspan="4">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+// ---- CONFIG: fill these in after deploying Code.gs as a web app ----
+const SCRIPT_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+const SECRET = 'PASTE_THE_SAME_SECRET_FROM_CODE_GS_HERE';
+// ----------------------------------------------------------------------
+
+const EXPENSE_CATEGORIES = ['Internet/Load', 'Transportation', 'Food', 'Other', 'Mama', 'Tithes'];
+const INCOME_CATEGORIES = ['Church', 'School', 'Other'];
+
+let records = [];
+let currentKind = 'expense';
+
+const dateInput = document.getElementById('dateInput');
+const amountInput = document.getElementById('amountInput');
+const categoryInput = document.getElementById('categoryInput');
+const submitBtn = document.getElementById('submitBtn');
+const statusMsg = document.getElementById('statusMsg');
+const filterKind = document.getElementById('filterKind');
+const filterCategory = document.getElementById('filterCategory');
+const recordsBody = document.getElementById('recordsBody');
+const configWarning = document.getElementById('configWarning');
+
+function checkConfig() {
+  if (SCRIPT_URL.includes('PASTE_') || SECRET.includes('PASTE_')) {
+    configWarning.innerHTML = '<div class="config-warning">This site isn\'t connected to your sheet yet. Open index.html and fill in SCRIPT_URL and SECRET at the top of the script tag.</div>';
+    submitBtn.disabled = true;
+    return false;
+  }
+  return true;
+}
+
+function money(n) {
+  return '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function setKind(kind) {
+  currentKind = kind;
+  document.querySelectorAll('.kind-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.kind === kind);
+  });
+  populateCategoryOptions(categoryInput, kind === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+}
+
+function populateCategoryOptions(select, list) {
+  select.innerHTML = '';
+  list.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    select.appendChild(opt);
+  });
+}
+
+document.querySelectorAll('.kind-toggle button').forEach(btn => {
+  btn.addEventListener('click', () => setKind(btn.dataset.kind));
+});
+
+function populateFilterCategories() {
+  const kind = filterKind.value;
+  let list;
+  if (kind === 'expense') list = EXPENSE_CATEGORIES;
+  else if (kind === 'income') list = INCOME_CATEGORIES;
+  else list = [...new Set([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES])];
+
+  filterCategory.innerHTML = '<option value="all">All</option>';
+  list.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    filterCategory.appendChild(opt);
+  });
+}
+
+filterKind.addEventListener('change', () => {
+  populateFilterCategories();
+  render();
+});
+filterCategory.addEventListener('change', render);
+
+async function loadRecords() {
+  if (!checkConfig()) return;
+  try {
+    const res = await fetch(SCRIPT_URL);
+    const data = await res.json();
+    records = data.records || [];
+    render();
+  } catch (err) {
+    recordsBody.innerHTML = '<tr class="empty-row"><td colspan="4">Couldn\'t load records. Check SCRIPT_URL and that the Apps Script is deployed as "Anyone" can access.</td></tr>';
+  }
+}
+
+function render() {
+  const kindFilter = filterKind.value;
+  const catFilter = filterCategory.value;
+
+  let filtered = records.filter(r => {
+    if (kindFilter !== 'all' && r.kind !== kindFilter) return false;
+    if (catFilter !== 'all' && r.category !== catFilter) return false;
+    return true;
+  });
+
+  filtered.sort((a, b) => b.date.localeCompare(a.date));
+
+  if (filtered.length === 0) {
+    recordsBody.innerHTML = '<tr class="empty-row"><td colspan="4">No entries match this filter.</td></tr>';
+  } else {
+    recordsBody.innerHTML = filtered.map(r => `
+      <tr>
+        <td>${r.date}</td>
+        <td><span class="badge ${r.kind}">${r.kind}</span></td>
+        <td>${r.category}</td>
+        <td class="num amount ${r.kind}">${r.kind === 'expense' ? '−' : '+'}${money(r.amount)}</td>
+      </tr>
+    `).join('');
+  }
+
+  const totalIncome = records.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
+  const totalExpense = records.filter(r => r.kind === 'expense').reduce((s, r) => s + Number(r.amount), 0);
+  document.getElementById('totalIncome').textContent = money(totalIncome);
+  document.getElementById('totalExpense').textContent = money(totalExpense);
+  document.getElementById('totalNet').textContent = money(totalIncome - totalExpense);
+}
+
+document.getElementById('entryForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!checkConfig()) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Adding…';
+  statusMsg.textContent = '';
+  statusMsg.className = 'status-msg';
+
+  const payload = {
+    secret: SECRET,
+    kind: currentKind,
+    date: dateInput.value,
+    amount: amountInput.value,
+    category: categoryInput.value
+  };
+
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight; Apps Script doesn't handle OPTIONS
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    statusMsg.textContent = 'Added.';
+    statusMsg.className = 'status-msg ok';
+    amountInput.value = '';
+    records.push({ kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category });
+    render();
+  } catch (err) {
+    statusMsg.textContent = 'Failed to save: ' + err.message;
+    statusMsg.className = 'status-msg error';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Add entry';
+  }
+});
+
+// init
+dateInput.valueAsDate = new Date();
+setKind('expense');
+populateFilterCategories();
+checkConfig();
+loadRecords();
+</script>
+</body>
+</html>
