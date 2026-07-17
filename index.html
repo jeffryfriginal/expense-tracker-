@@ -326,6 +326,46 @@
   .amount.expense { color: var(--expense); }
   .amount.income { color: var(--income); }
 
+  td.actions { text-align: right; }
+  .edit-btn {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 4px 10px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .edit-btn:hover { border-color: var(--ink); color: var(--ink); }
+
+  .edit-banner {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--paper-dim);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 8px 14px;
+    margin-bottom: 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+  }
+  .edit-banner.open { display: flex; }
+  .edit-banner .cancel-edit {
+    background: none;
+    border: none;
+    text-decoration: underline;
+    color: var(--expense);
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
   .empty-row td {
     text-align: center;
     color: var(--muted);
@@ -403,7 +443,11 @@
   </div>
 
   <form id="entryForm">
-    <div class="kind-toggle">
+    <div class="edit-banner" id="editBanner">
+      <span>Editing an existing entry — kind can't be changed here.</span>
+      <button type="button" class="cancel-edit" id="cancelEditBtn">Cancel edit</button>
+    </div>
+    <div class="kind-toggle" id="kindToggle">
       <button type="button" data-kind="expense" class="active">Expense</button>
       <button type="button" data-kind="income">Income</button>
     </div>
@@ -491,10 +535,11 @@
         <th>Kind</th>
         <th>Category</th>
         <th class="num">Amount</th>
+        <th></th>
       </tr>
     </thead>
     <tbody id="recordsBody">
-      <tr class="empty-row"><td colspan="4">Loading…</td></tr>
+      <tr class="empty-row"><td colspan="5">Loading…</td></tr>
     </tbody>
   </table>
   <div class="show-more-wrap" id="showMoreWrap" style="display:none;">
@@ -617,7 +662,7 @@ async function loadRecords() {
     records = data.records || [];
     render();
   } catch (err) {
-    recordsBody.innerHTML = '<tr class="empty-row"><td colspan="4">Error loading data.</td></tr>';
+    recordsBody.innerHTML = '<tr class="empty-row"><td colspan="5">Error loading data.</td></tr>';
   }
 }
 
@@ -639,7 +684,7 @@ function render() {
   const toShow = filtered.slice(0, visibleCount);
 
   if (toShow.length === 0) {
-    recordsBody.innerHTML = '<tr class="empty-row"><td colspan="4">No entries match this filter.</td></tr>';
+    recordsBody.innerHTML = '<tr class="empty-row"><td colspan="5">No entries match this filter.</td></tr>';
   } else {
     recordsBody.innerHTML = toShow.map(r => `
       <tr>
@@ -647,6 +692,7 @@ function render() {
         <td><span class="badge ${r.kind}">${r.kind}</span></td>
         <td>${r.category}</td>
         <td class="num amount ${r.kind}">${r.kind === 'expense' ? '−' : '+'}${money(r.amount)}</td>
+        <td class="actions"><button type="button" class="edit-btn" data-row="${r.row}" data-kind="${r.kind}" data-date="${r.date}" data-amount="${r.amount}" data-category="${r.category}">Edit</button></td>
       </tr>
     `).join('');
   }
@@ -675,14 +721,75 @@ function render() {
   }
 }
 
+let editingRow = null; // null = add mode; a sheet row number = edit mode
+const editBanner = document.getElementById('editBanner');
+const kindToggle = document.getElementById('kindToggle');
+const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+recordsBody.addEventListener('click', (e) => {
+  const btn = e.target.closest('.edit-btn');
+  if (!btn) return;
+  enterEditMode({
+    row: Number(btn.dataset.row),
+    kind: btn.dataset.kind,
+    date: btn.dataset.date,
+    amount: btn.dataset.amount,
+    category: btn.dataset.category
+  });
+});
+
+function enterEditMode(record) {
+  editingRow = record.row;
+  currentKind = record.kind;
+
+  // lock the kind toggle visually and functionally, since kind can't change on edit
+  document.querySelectorAll('.kind-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.kind === record.kind);
+  });
+  kindToggle.style.pointerEvents = 'none';
+  kindToggle.style.opacity = '0.5';
+
+  populateCategoryOptions(categoryInput, record.kind === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+  dateInput.value = record.date;
+  amountInput.value = record.amount;
+  categoryInput.value = record.category;
+
+  editBanner.classList.add('open');
+  submitBtn.textContent = 'Save changes';
+  statusMsg.textContent = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function exitEditMode() {
+  editingRow = null;
+  kindToggle.style.pointerEvents = '';
+  kindToggle.style.opacity = '';
+  editBanner.classList.remove('open');
+  submitBtn.textContent = 'Add entry';
+  amountInput.value = '';
+  statusMsg.textContent = '';
+  setKind('expense');
+  dateInput.valueAsDate = new Date();
+}
+
+cancelEditBtn.addEventListener('click', exitEditMode);
+
 document.getElementById('entryForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!checkConfig()) return;
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Adding…';
-  
-  const payload = { secret: SECRET, kind: currentKind, date: dateInput.value, amount: amountInput.value, category: categoryInput.value };
+  submitBtn.textContent = editingRow ? 'Saving…' : 'Adding…';
+
+  const payload = {
+    secret: SECRET,
+    action: editingRow ? 'edit' : 'add',
+    row: editingRow || undefined,
+    kind: currentKind,
+    date: dateInput.value,
+    amount: amountInput.value,
+    category: categoryInput.value
+  };
 
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -693,15 +800,26 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    statusMsg.textContent = 'Added.';
-    amountInput.value = '';
-    records.push({ kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category });
+    if (editingRow) {
+      const target = records.find(r => r.row === editingRow && r.kind === payload.kind);
+      if (target) {
+        target.date = payload.date;
+        target.amount = Number(payload.amount);
+        target.category = payload.category;
+      }
+      statusMsg.textContent = 'Saved.';
+      exitEditMode();
+    } else {
+      statusMsg.textContent = 'Added.';
+      amountInput.value = '';
+      records.push({ kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category });
+    }
     render();
   } catch (err) {
     statusMsg.textContent = 'Failed: ' + err.message;
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Add entry';
+    submitBtn.textContent = editingRow ? 'Save changes' : 'Add entry';
   }
 });
 
