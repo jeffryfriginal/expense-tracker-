@@ -104,7 +104,7 @@
 
   .tally {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr auto;
+    grid-template-columns: 1fr 1fr 1fr; }
     border-bottom: 1px solid var(--line);
   }
 
@@ -498,17 +498,17 @@
     <div class="tally-item">
       <div class="tally-label">Income</div>
       <div class="tally-value income" id="totalIncome">₱0.00</div>
+      <button type="button" class="eye-toggle-small" data-target="income" title="Show">👁</button>
     </div>
     <div class="tally-item">
       <div class="tally-label">Expenses</div>
       <div class="tally-value expense" id="totalExpense">₱0.00</div>
+      <button type="button" class="eye-toggle-small" data-target="expenses" title="Show">👁</button>
     </div>
     <div class="tally-item">
       <div class="tally-label">Net</div>
       <div class="tally-value" id="totalNet">₱0.00</div>
-    </div>
-    <div class="tally-item tally-eye-item">
-      <button type="button" class="eye-toggle" id="eyeToggle" title="Show amounts" aria-label="Show amounts">👁</button>
+      <button type="button" class="eye-toggle-small" data-target="totalnet" title="Show">👁</button>
     </div>
   </div>
 
