@@ -5,8 +5,8 @@ through a small Apps Script backend. No database, no build step.
 
 ## What's in here
 
-- `index.html` — the whole site. Form to add entries, table to view/filter, running totals.
-- `Code.gs` — goes into your Google Sheet's Apps Script, not into the GitHub repo's build. It reads/writes columns A–C (expenses) and F–H (income) on `Sheet1`.
+- `index.html` the whole site. Form to add entries, table to view/filter, running totals.
+- `Code.gs` goes into your Google Sheet's Apps Script, not into the GitHub repo's build. It reads/writes columns A–C (expenses) and F–H (income) on `Sheet1`.
 
 ## Setup, in order
 
