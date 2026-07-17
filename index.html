@@ -333,6 +333,25 @@
     font-family: 'Inter', sans-serif;
   }
 
+  .show-more-wrap {
+    padding: 16px 32px 24px;
+    text-align: center;
+  }
+  .show-more-btn {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 9px 22px;
+    background: none;
+    border: 1px solid var(--ink);
+    border-radius: 3px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .show-more-btn:hover { background: var(--ink); color: var(--paper); }
+
   .config-warning {
     margin: 20px 16px 0;
     max-width: 780px;
@@ -478,6 +497,9 @@
       <tr class="empty-row"><td colspan="4">Loading…</td></tr>
     </tbody>
   </table>
+  <div class="show-more-wrap" id="showMoreWrap" style="display:none;">
+    <button type="button" class="show-more-btn" id="showMoreBtn">Show more</button>
+  </div>
 </div>
 
 <script>
@@ -566,14 +588,24 @@ function populateFilterCategories() {
 
 filterKind.addEventListener('change', () => {
   populateFilterCategories();
+  visibleCount = PAGE_SIZE;
   render();
 });
-filterCategory.addEventListener('change', render);
+filterCategory.addEventListener('change', () => {
+  visibleCount = PAGE_SIZE;
+  render();
+});
+
+document.getElementById('showMoreBtn').addEventListener('click', () => {
+  visibleCount += PAGE_SIZE;
+  render();
+});
 
 showAllBtn.addEventListener('click', () => {
   filterKind.value = 'all';
   populateFilterCategories();
   filterCategory.value = 'all';
+  visibleCount = PAGE_SIZE;
   render();
 });
 
@@ -589,6 +621,9 @@ async function loadRecords() {
   }
 }
 
+const PAGE_SIZE = 20;
+let visibleCount = PAGE_SIZE;
+
 function render() {
   const kindFilter = filterKind.value;
   const catFilter = filterCategory.value;
@@ -601,10 +636,12 @@ function render() {
 
   filtered.sort((a, b) => b.date.localeCompare(a.date));
 
-  if (filtered.length === 0) {
+  const toShow = filtered.slice(0, visibleCount);
+
+  if (toShow.length === 0) {
     recordsBody.innerHTML = '<tr class="empty-row"><td colspan="4">No entries match this filter.</td></tr>';
   } else {
-    recordsBody.innerHTML = filtered.map(r => `
+    recordsBody.innerHTML = toShow.map(r => `
       <tr>
         <td>${r.date}</td>
         <td><span class="badge ${r.kind}">${r.kind}</span></td>
@@ -612,6 +649,15 @@ function render() {
         <td class="num amount ${r.kind}">${r.kind === 'expense' ? '−' : '+'}${money(r.amount)}</td>
       </tr>
     `).join('');
+  }
+
+  const showMoreWrap = document.getElementById('showMoreWrap');
+  const showMoreBtn = document.getElementById('showMoreBtn');
+  if (filtered.length > visibleCount) {
+    showMoreWrap.style.display = 'block';
+    showMoreBtn.textContent = `Show more (${filtered.length - visibleCount} left)`;
+  } else {
+    showMoreWrap.style.display = 'none';
   }
 
   const totalIncome = records.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
@@ -639,7 +685,11 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
   const payload = { secret: SECRET, kind: currentKind, date: dateInput.value, amount: amountInput.value, category: categoryInput.value };
 
   try {
-    const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight; Apps Script doesn't handle OPTIONS
+      body: JSON.stringify(payload)
+    });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
