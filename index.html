@@ -104,7 +104,7 @@
 
   .tally {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr; }
+    grid-template-columns: 1fr 1fr 1fr;
     border-bottom: 1px solid var(--line);
   }
 
@@ -628,12 +628,15 @@ let records = [];
 let currentKind = 'expense';
 let amountsVisible = false; // hidden by default, on every fresh load
 
-const eyeToggle = document.getElementById('eyeToggle');
-eyeToggle.addEventListener('click', () => {
-  amountsVisible = !amountsVisible;
-  eyeToggle.textContent = amountsVisible ? '🙈' : '👁';
-  eyeToggle.title = amountsVisible ? 'Hide amounts' : 'Show amounts';
-  render();
+document.querySelectorAll('.eye-toggle-small').forEach(btn => {
+  btn.addEventListener('click', () => {
+    amountsVisible = !amountsVisible;
+    document.querySelectorAll('.eye-toggle-small').forEach(b=>{
+      b.textContent = amountsVisible ? '🙈':'👁';
+      b.title = amountsVisible ? 'Hide amounts':'Show amounts';
+    });
+    render();
+  });
 });
 
 const dateInput = document.getElementById('dateInput');
@@ -681,22 +684,6 @@ function populateCategoryOptions(select, list) {
 document.querySelectorAll('.kind-toggle button').forEach(btn => {
   btn.addEventListener('click', () => setKind(btn.dataset.kind));
 });
-
-function populateFilterCategories() {
-  const kind = filterKind.value;
-  let list;
-  if (kind === 'expense') list = EXPENSE_CATEGORIES;
-  else if (kind === 'income') list = INCOME_CATEGORIES;
-  else list = [...new Set([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES])];
-
-  filterCategory.innerHTML = '<option value="all">All</option>';
-  list.forEach(cat => {
-    const opt = document.createElement('option');
-    opt.value = cat;
-    opt.textContent = cat;
-    select.appendChild(opt);
-  });
-}
 
 function populateFilterCategories() {
   const kind = filterKind.value;
