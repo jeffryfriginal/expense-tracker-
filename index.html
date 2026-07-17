@@ -254,6 +254,7 @@
     padding: 18px 32px;
     border-bottom: 1px solid var(--line);
     background: var(--paper-dim);
+    align-items: flex-end;
   }
 
   .controls label { margin-bottom: 4px; }
@@ -351,7 +352,7 @@
     .tally { grid-template-columns: 1fr; }
     .tally-item { border-right: none; border-bottom: 1px solid var(--line); }
     header, form, .controls, th, td { padding-left: 18px; padding-right: 18px; }
-    .controls { flex-direction: column; }
+    .controls { flex-direction: column; align-items: flex-start; }
   }
 </style>
 </head>
@@ -454,6 +455,9 @@
         <option value="all">All</option>
       </select>
     </div>
+    <div>
+      <button type="button" class="calc-toggle" id="showAllBtn">Show All</button>
+    </div>
   </div>
 
   <div class="filtered-total" id="filteredTotal" style="display:none;">
@@ -477,10 +481,8 @@
 </div>
 
 <script>
-// ---- CONFIG: fill these in after deploying Code.gs as a web app ----
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBbNk47VgaCjeb0nLijbxzzLEUIOj_Syp5TZq9KYipsQQd5kKLtan537hX9DS4uhfuxA/exec';
 const SECRET = 'N3E9Z5Y1';
-// ----------------------------------------------------------------------
 
 const EXPENSE_CATEGORIES = ['Internet/Load', 'Transportation', 'Food', 'Other', 'Mama', 'Tithes'];
 const INCOME_CATEGORIES = ['Church', 'School', 'Other'];
@@ -495,12 +497,13 @@ const submitBtn = document.getElementById('submitBtn');
 const statusMsg = document.getElementById('statusMsg');
 const filterKind = document.getElementById('filterKind');
 const filterCategory = document.getElementById('filterCategory');
+const showAllBtn = document.getElementById('showAllBtn');
 const recordsBody = document.getElementById('recordsBody');
 const configWarning = document.getElementById('configWarning');
 
 function checkConfig() {
   if (SCRIPT_URL.includes('PASTE_') || SECRET.includes('PASTE_')) {
-    configWarning.innerHTML = '<div class="config-warning">This site isn\'t connected to your sheet yet. Open index.html and fill in SCRIPT_URL and SECRET at the top of the script tag.</div>';
+    configWarning.innerHTML = '<div class="config-warning">This site isn\'t connected to your sheet yet.</div>';
     submitBtn.disabled = true;
     return false;
   }
@@ -545,6 +548,18 @@ function populateFilterCategories() {
     const opt = document.createElement('option');
     opt.value = cat;
     opt.textContent = cat;
+    select.appendChild(opt);
+  });
+}
+
+function populateFilterCategories() {
+  const kind = filterKind.value;
+  let list = kind === 'expense' ? EXPENSE_CATEGORIES : (kind === 'income' ? INCOME_CATEGORIES : [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES]);
+  filterCategory.innerHTML = '<option value="all">All</option>';
+  list.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
     filterCategory.appendChild(opt);
   });
 }
@@ -555,6 +570,13 @@ filterKind.addEventListener('change', () => {
 });
 filterCategory.addEventListener('change', render);
 
+showAllBtn.addEventListener('click', () => {
+  filterKind.value = 'all';
+  populateFilterCategories();
+  filterCategory.value = 'all';
+  render();
+});
+
 async function loadRecords() {
   if (!checkConfig()) return;
   try {
@@ -563,7 +585,7 @@ async function loadRecords() {
     records = data.records || [];
     render();
   } catch (err) {
-    recordsBody.innerHTML = '<tr class="empty-row"><td colspan="4">Couldn\'t load records. Check SCRIPT_URL and that the Apps Script is deployed as "Anyone" can access.</td></tr>';
+    recordsBody.innerHTML = '<tr class="empty-row"><td colspan="4">Error loading data.</td></tr>';
   }
 }
 
@@ -592,37 +614,19 @@ function render() {
     `).join('');
   }
 
-  renderFilteredTotal(filtered, kindFilter, catFilter);
-
   const totalIncome = records.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
   const totalExpense = records.filter(r => r.kind === 'expense').reduce((s, r) => s + Number(r.amount), 0);
   document.getElementById('totalIncome').textContent = money(totalIncome);
   document.getElementById('totalExpense').textContent = money(totalExpense);
   document.getElementById('totalNet').textContent = money(totalIncome - totalExpense);
-}
 
-function renderFilteredTotal(filtered, kindFilter, catFilter) {
   const bar = document.getElementById('filteredTotal');
-  const labelEl = document.getElementById('filteredTotalLabel');
-  const valueEl = document.getElementById('filteredTotalValue');
-
-  // Only show this bar when a filter is actually narrowing something down.
   if (kindFilter === 'all' && catFilter === 'all') {
     bar.style.display = 'none';
-    return;
+  } else {
+    bar.style.display = 'flex';
+    document.getElementById('filteredTotalValue').textContent = money(filtered.reduce((s, r) => s + Number(r.amount), 0));
   }
-  bar.style.display = 'flex';
-
-  const sum = filtered.reduce((s, r) => s + Number(r.amount), 0);
-
-  let labelParts = [];
-  labelParts.push(catFilter !== 'all' ? catFilter : (kindFilter !== 'all' ? 'All categories' : ''));
-  labelParts.push(kindFilter !== 'all' ? kindFilter : 'combined');
-  const label = `Total — ${labelParts.filter(Boolean).join(', ')} (${filtered.length} ${filtered.length === 1 ? 'entry' : 'entries'})`;
-
-  labelEl.textContent = label;
-  valueEl.textContent = money(sum);
-  valueEl.className = 'value' + (kindFilter === 'expense' ? ' expense' : kindFilter === 'income' ? ' income' : '');
 }
 
 document.getElementById('entryForm').addEventListener('submit', async (e) => {
@@ -631,106 +635,51 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Adding…';
-  statusMsg.textContent = '';
-  statusMsg.className = 'status-msg';
-
-  const payload = {
-    secret: SECRET,
-    kind: currentKind,
-    date: dateInput.value,
-    amount: amountInput.value,
-    category: categoryInput.value
-  };
+  
+  const payload = { secret: SECRET, kind: currentKind, date: dateInput.value, amount: amountInput.value, category: categoryInput.value };
 
   try {
-    const res = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight; Apps Script doesn't handle OPTIONS
-      body: JSON.stringify(payload)
-    });
+    const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
     statusMsg.textContent = 'Added.';
-    statusMsg.className = 'status-msg ok';
     amountInput.value = '';
     records.push({ kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category });
     render();
   } catch (err) {
-    statusMsg.textContent = 'Failed to save: ' + err.message;
-    statusMsg.className = 'status-msg error';
+    statusMsg.textContent = 'Failed: ' + err.message;
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Add entry';
   }
 });
 
-// ---- Calculator ----
 const calcToggle = document.getElementById('calcToggle');
 const calcPanel = document.getElementById('calcPanel');
 const calcDisplay = document.getElementById('calcDisplay');
-const calcUseBtn = document.getElementById('calcUseBtn');
-
-let calcExpr = '';
-
-calcToggle.addEventListener('click', () => {
-  calcPanel.classList.toggle('open');
-});
+calcToggle.addEventListener('click', () => calcPanel.classList.toggle('open'));
 
 document.querySelectorAll('[data-calc]').forEach(btn => {
-  btn.addEventListener('click', () => handleCalcInput(btn.dataset.calc));
+  btn.addEventListener('click', () => {
+    let key = btn.dataset.calc;
+    if (key === 'clear') calcExpr = '';
+    else if (key === 'back') calcExpr = calcExpr.slice(0, -1);
+    else if (key === '=') calcExpr = String(Function('"use strict"; return (' + calcExpr.replace(/%/g, '/100*') + ')')());
+    else calcExpr += key;
+    calcDisplay.textContent = calcExpr || '0';
+  });
 });
 
-function handleCalcInput(key) {
-  if (key === 'clear') {
-    calcExpr = '';
-  } else if (key === 'back') {
-    calcExpr = calcExpr.slice(0, -1);
-  } else if (key === '=') {
-    calcExpr = evaluateCalc(calcExpr);
-  } else {
-    // block two operators in a row, and leading operators other than nothing
-    const lastChar = calcExpr.slice(-1);
-    const isOperator = c => ['+', '-', '*', '/', '%'].includes(c);
-    if (isOperator(key) && (calcExpr === '' || isOperator(lastChar))) {
-      if (calcExpr === '') return; // no leading operator
-      calcExpr = calcExpr.slice(0, -1) + key; // replace trailing operator
-    } else {
-      calcExpr += key;
-    }
-  }
-  calcDisplay.textContent = calcExpr === '' ? '0' : calcExpr;
-}
-
-function evaluateCalc(expr) {
-  if (!expr) return '';
-  // only digits, ., and + - * / % allowed, no eval of arbitrary code
-  if (!/^[0-9.+\-*/%]+$/.test(expr)) return 'Error';
-  try {
-    const result = Function('"use strict"; return (' + expr.replace(/%/g, '/100*') + ')')();
-    if (!isFinite(result)) return 'Error';
-    return String(Math.round(result * 100) / 100);
-  } catch (e) {
-    return 'Error';
-  }
-}
-
-calcUseBtn.addEventListener('click', () => {
-  const result = evaluateCalc(calcExpr);
-  if (result && result !== 'Error') {
-    amountInput.value = result;
-    calcExpr = '';
-    calcDisplay.textContent = '0';
-    calcPanel.classList.remove('open');
-    amountInput.focus();
-  }
+let calcExpr = '';
+document.getElementById('calcUseBtn').addEventListener('click', () => {
+  amountInput.value = calcExpr;
+  calcPanel.classList.remove('open');
 });
 
-// init
 dateInput.valueAsDate = new Date();
 setKind('expense');
 populateFilterCategories();
-checkConfig();
 loadRecords();
 </script>
 </body>
