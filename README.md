@@ -1,4 +1,4 @@
-# Ledger — personal expense/income tracker
+# Ledger, personal expense/income tracker
 
 Static site (GitHub Pages) that reads/writes to your existing Google Sheet
 through a small Apps Script backend. No database, no build step.
