@@ -259,6 +259,30 @@
   .controls label { margin-bottom: 4px; }
   .controls select { min-width: 150px; }
 
+  .filtered-total {
+    padding: 12px 32px;
+    border-bottom: 1px solid var(--line);
+    background: var(--paper-dim);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .filtered-total .label {
+    color: var(--muted);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+  .filtered-total .value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .filtered-total .value.expense { color: var(--expense); }
+  .filtered-total .value.income { color: var(--income); }
+
   table {
     width: 100%;
     border-collapse: collapse;
@@ -432,6 +456,11 @@
     </div>
   </div>
 
+  <div class="filtered-total" id="filteredTotal" style="display:none;">
+    <span class="label" id="filteredTotalLabel">Total for this filter</span>
+    <span class="value" id="filteredTotalValue">₱0.00</span>
+  </div>
+
   <table>
     <thead>
       <tr>
@@ -563,11 +592,37 @@ function render() {
     `).join('');
   }
 
+  renderFilteredTotal(filtered, kindFilter, catFilter);
+
   const totalIncome = records.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
   const totalExpense = records.filter(r => r.kind === 'expense').reduce((s, r) => s + Number(r.amount), 0);
   document.getElementById('totalIncome').textContent = money(totalIncome);
   document.getElementById('totalExpense').textContent = money(totalExpense);
   document.getElementById('totalNet').textContent = money(totalIncome - totalExpense);
+}
+
+function renderFilteredTotal(filtered, kindFilter, catFilter) {
+  const bar = document.getElementById('filteredTotal');
+  const labelEl = document.getElementById('filteredTotalLabel');
+  const valueEl = document.getElementById('filteredTotalValue');
+
+  // Only show this bar when a filter is actually narrowing something down.
+  if (kindFilter === 'all' && catFilter === 'all') {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+
+  const sum = filtered.reduce((s, r) => s + Number(r.amount), 0);
+
+  let labelParts = [];
+  labelParts.push(catFilter !== 'all' ? catFilter : (kindFilter !== 'all' ? 'All categories' : ''));
+  labelParts.push(kindFilter !== 'all' ? kindFilter : 'combined');
+  const label = `Total — ${labelParts.filter(Boolean).join(', ')} (${filtered.length} ${filtered.length === 1 ? 'entry' : 'entries'})`;
+
+  labelEl.textContent = label;
+  valueEl.textContent = money(sum);
+  valueEl.className = 'value' + (kindFilter === 'expense' ? ' expense' : kindFilter === 'income' ? ' income' : '');
 }
 
 document.getElementById('entryForm').addEventListener('submit', async (e) => {
