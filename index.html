@@ -444,7 +444,7 @@
 
   <form id="entryForm">
     <div class="edit-banner" id="editBanner">
-      <span>Editing an existing entry. The kind of entry can't be changed here.</span>
+      <span>Editing an existing entry — kind can't be changed here.</span>
       <button type="button" class="cancel-edit" id="cancelEditBtn">Cancel edit</button>
     </div>
     <div class="kind-toggle" id="kindToggle">
@@ -654,12 +654,15 @@ showAllBtn.addEventListener('click', () => {
   render();
 });
 
+let recordSeq = 0;
+
 async function loadRecords() {
   if (!checkConfig()) return;
   try {
     const res = await fetch(SCRIPT_URL);
     const data = await res.json();
     records = data.records || [];
+    records.forEach(r => { r._seq = recordSeq++; });
     render();
   } catch (err) {
     recordsBody.innerHTML = '<tr class="empty-row"><td colspan="5">Error loading data.</td></tr>';
@@ -679,7 +682,11 @@ function render() {
     return true;
   });
 
-  filtered.sort((a, b) => b.date.localeCompare(a.date));
+  filtered.sort((a, b) => {
+    const byDate = b.date.localeCompare(a.date);
+    if (byDate !== 0) return byDate;
+    return (b._seq || 0) - (a._seq || 0);
+  });
 
   const toShow = filtered.slice(0, visibleCount);
 
@@ -812,7 +819,7 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
     } else {
       statusMsg.textContent = 'Added.';
       amountInput.value = '';
-      records.push({ kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category });
+      records.push({ kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category, _seq: recordSeq++ });
     }
     render();
   } catch (err) {
