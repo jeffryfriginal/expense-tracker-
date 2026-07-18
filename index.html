@@ -613,7 +613,8 @@
 
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBbNk47VgaCjeb0nLijbxzzLEUIOj_Syp5TZq9KYipsQQd5kKLtan537hX9DS4uhfuxA/exec';
-const SECRET = 'N3E9Z5Y1';
+// No password or secret is stored here anymore — it's typed at the login
+// screen each session and held only in memory (see sessionPassword below).
 
 const EXPENSE_CATEGORIES = ['Internet/Load', 'Transportation', 'Food', 'Other', 'Mama', 'Tithes'];
 const INCOME_CATEGORIES = ['Church', 'School', 'Other'];
@@ -644,7 +645,7 @@ const recordsBody = document.getElementById('recordsBody');
 const configWarning = document.getElementById('configWarning');
 
 function checkConfig() {
-  if (SCRIPT_URL.includes('PASTE_') || SECRET.includes('PASTE_')) {
+  if (SCRIPT_URL.includes('PASTE_')) {
     configWarning.innerHTML = '<div class="config-warning">This site isn\'t connected to your sheet yet.</div>';
     submitBtn.disabled = true;
     return false;
@@ -846,7 +847,7 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
   submitBtn.textContent = editingRow ? 'Saving…' : 'Adding…';
 
   const payload = {
-    secret: SECRET,
+    password: sessionPassword,
     action: editingRow ? 'edit' : 'add',
     row: editingRow || undefined,
     kind: currentKind,
