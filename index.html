@@ -108,23 +108,17 @@
     border-bottom: 1px solid var(--line);
   }
 
-  .tally-eye-item {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px 20px;
-  }
-  .eye-toggle {
+  .eye-toggle-small {
     background: none;
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    width: 34px;
-    height: 34px;
-    font-size: 15px;
+    border: none;
+    font-size: 12px;
     cursor: pointer;
-    color: var(--muted);
+    opacity: 0.5;
+    margin-left: 6px;
+    vertical-align: middle;
+    padding: 0;
   }
-  .eye-toggle:hover { border-color: var(--ink); color: var(--ink); }
+  .eye-toggle-small:hover { opacity: 1; }
 
   .tally-item {
     padding: 16px 24px;
@@ -626,15 +620,14 @@ const INCOME_CATEGORIES = ['Church', 'School', 'Other'];
 
 let records = [];
 let currentKind = 'expense';
-let amountsVisible = false; // hidden by default, on every fresh load
+let visible = { income: false, expenses: false, totalnet: false }; // each hidden by default, independently
 
 document.querySelectorAll('.eye-toggle-small').forEach(btn => {
   btn.addEventListener('click', () => {
-    amountsVisible = !amountsVisible;
-    document.querySelectorAll('.eye-toggle-small').forEach(b=>{
-      b.textContent = amountsVisible ? '🙈':'👁';
-      b.title = amountsVisible ? 'Hide amounts':'Show amounts';
-    });
+    const key = btn.dataset.target;
+    visible[key] = !visible[key];
+    btn.textContent = visible[key] ? '🙈' : '👁';
+    btn.title = visible[key] ? 'Hide' : 'Show';
     render();
   });
 });
@@ -684,6 +677,22 @@ function populateCategoryOptions(select, list) {
 document.querySelectorAll('.kind-toggle button').forEach(btn => {
   btn.addEventListener('click', () => setKind(btn.dataset.kind));
 });
+
+function populateFilterCategories() {
+  const kind = filterKind.value;
+  let list;
+  if (kind === 'expense') list = EXPENSE_CATEGORIES;
+  else if (kind === 'income') list = INCOME_CATEGORIES;
+  else list = [...new Set([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES])];
+
+  filterCategory.innerHTML = '<option value="all">All</option>';
+  list.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    select.appendChild(opt);
+  });
+}
 
 function populateFilterCategories() {
   const kind = filterKind.value;
@@ -779,9 +788,9 @@ function render() {
 
   const totalIncome = records.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
   const totalExpense = records.filter(r => r.kind === 'expense').reduce((s, r) => s + Number(r.amount), 0);
-  document.getElementById('totalIncome').textContent = amountsVisible ? money(totalIncome) : '₱••••.••';
-  document.getElementById('totalExpense').textContent = amountsVisible ? money(totalExpense) : '₱••••.••';
-  document.getElementById('totalNet').textContent = amountsVisible ? money(totalIncome - totalExpense) : '₱••••.••';
+  document.getElementById('totalIncome').textContent = visible.income ? money(totalIncome) : '₱••••.••';
+  document.getElementById('totalExpense').textContent = visible.expenses ? money(totalExpense) : '₱••••.••';
+  document.getElementById('totalNet').textContent = visible.totalnet ? money(totalIncome - totalExpense) : '₱••••.••';
 
   const bar = document.getElementById('filteredTotal');
   if (kindFilter === 'all' && catFilter === 'all') {
