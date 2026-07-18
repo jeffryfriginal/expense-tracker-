@@ -620,7 +620,7 @@ const INCOME_CATEGORIES = ['Church', 'School', 'Other'];
 
 let records = [];
 let currentKind = 'expense';
-let visible = { income: false, expenses: false, totalnet: false }; // each hidden by default, independently
+let visible = { income: false, expenses: false, totalnet: false }; // each starts hidden, independently, on every fresh load
 
 document.querySelectorAll('.eye-toggle-small').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -677,22 +677,6 @@ function populateCategoryOptions(select, list) {
 document.querySelectorAll('.kind-toggle button').forEach(btn => {
   btn.addEventListener('click', () => setKind(btn.dataset.kind));
 });
-
-function populateFilterCategories() {
-  const kind = filterKind.value;
-  let list;
-  if (kind === 'expense') list = EXPENSE_CATEGORIES;
-  else if (kind === 'income') list = INCOME_CATEGORIES;
-  else list = [...new Set([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES])];
-
-  filterCategory.innerHTML = '<option value="all">All</option>';
-  list.forEach(cat => {
-    const opt = document.createElement('option');
-    opt.value = cat;
-    opt.textContent = cat;
-    select.appendChild(opt);
-  });
-}
 
 function populateFilterCategories() {
   const kind = filterKind.value;
