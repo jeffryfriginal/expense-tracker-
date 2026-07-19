@@ -743,7 +743,9 @@ function render() {
   filtered.sort((a, b) => {
     const byDate = b.date.localeCompare(a.date);
     if (byDate !== 0) return byDate;
-    return (b._seq || 0) - (a._seq || 0);
+    const byAddedAt = (b.addedAt || 0) - (a.addedAt || 0);
+    if (byAddedAt !== 0) return byAddedAt;
+    return (b._seq || 0) - (a._seq || 0); // fallback only for legacy rows with no real timestamp on either side
   });
 
   const toShow = filtered.slice(0, visibleCount);
@@ -877,7 +879,7 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
     } else {
       statusMsg.textContent = 'Added.';
       amountInput.value = '';
-      records.push({ kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category, _seq: recordSeq++ });
+      records.push({ row: data.row, kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category, addedAt: Date.now(), _seq: recordSeq++ });
     }
     render();
   } catch (err) {
