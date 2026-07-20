@@ -583,6 +583,14 @@
       </select>
     </div>
     <div>
+      <label for="filterFrom">From</label>
+      <input type="date" id="filterFrom">
+    </div>
+    <div>
+      <label for="filterTo">To</label>
+      <input type="date" id="filterTo">
+    </div>
+    <div>
       <button type="button" class="calc-toggle" id="showAllBtn">Show All</button>
     </div>
   </div>
@@ -640,6 +648,8 @@ const submitBtn = document.getElementById('submitBtn');
 const statusMsg = document.getElementById('statusMsg');
 const filterKind = document.getElementById('filterKind');
 const filterCategory = document.getElementById('filterCategory');
+const filterFrom = document.getElementById('filterFrom');
+const filterTo = document.getElementById('filterTo');
 const showAllBtn = document.getElementById('showAllBtn');
 const recordsBody = document.getElementById('recordsBody');
 const configWarning = document.getElementById('configWarning');
@@ -700,6 +710,14 @@ filterCategory.addEventListener('change', () => {
   visibleCount = PAGE_SIZE;
   render();
 });
+filterFrom.addEventListener('change', () => {
+  visibleCount = PAGE_SIZE;
+  render();
+});
+filterTo.addEventListener('change', () => {
+  visibleCount = PAGE_SIZE;
+  render();
+});
 
 document.getElementById('showMoreBtn').addEventListener('click', () => {
   visibleCount += PAGE_SIZE;
@@ -710,6 +728,8 @@ showAllBtn.addEventListener('click', () => {
   filterKind.value = 'all';
   populateFilterCategories();
   filterCategory.value = 'all';
+  filterFrom.value = '';
+  filterTo.value = '';
   visibleCount = PAGE_SIZE;
   render();
 });
@@ -733,10 +753,14 @@ let visibleCount = PAGE_SIZE;
 function render() {
   const kindFilter = filterKind.value;
   const catFilter = filterCategory.value;
+  const fromFilter = filterFrom.value;
+  const toFilter = filterTo.value;
 
   let filtered = records.filter(r => {
     if (kindFilter !== 'all' && r.kind !== kindFilter) return false;
     if (catFilter !== 'all' && r.category !== catFilter) return false;
+    if (fromFilter && r.date < fromFilter) return false;
+    if (toFilter && r.date > toFilter) return false;
     return true;
   });
 
@@ -780,11 +804,20 @@ function render() {
   document.getElementById('totalNet').textContent = visible.totalnet ? money(totalIncome - totalExpense) : '₱••••.••';
 
   const bar = document.getElementById('filteredTotal');
-  if (kindFilter === 'all' && catFilter === 'all') {
+  if (kindFilter === 'all' && catFilter === 'all' && !fromFilter && !toFilter) {
     bar.style.display = 'none';
   } else {
     bar.style.display = 'flex';
-    document.getElementById('filteredTotalValue').textContent = money(filtered.reduce((s, r) => s + Number(r.amount), 0));
+    const sum = filtered.reduce((s, r) => s + Number(r.amount), 0);
+    document.getElementById('filteredTotalValue').textContent = money(sum);
+
+    let parts = [];
+    parts.push(catFilter !== 'all' ? catFilter : (kindFilter !== 'all' ? (kindFilter === 'expense' ? 'Expenses' : 'Income') : 'All'));
+    if (fromFilter || toFilter) {
+      parts.push((fromFilter || '…') + ' to ' + (toFilter || '…'));
+    }
+    document.getElementById('filteredTotalLabel').textContent =
+      `Total — ${parts.join(', ')} (${filtered.length} ${filtered.length === 1 ? 'entry' : 'entries'})`;
   }
 }
 
