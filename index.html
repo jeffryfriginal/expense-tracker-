@@ -804,7 +804,7 @@ function render() {
   document.getElementById('totalNet').textContent = visible.totalnet ? money(totalIncome - totalExpense) : '₱••••.••';
 
   const bar = document.getElementById('filteredTotal');
-  if (kindFilter === 'all' && catFilter === 'all' && !fromFilter && !toFilter) {
+  if (kindFilter === 'all') {
     bar.style.display = 'none';
   } else {
     bar.style.display = 'flex';
