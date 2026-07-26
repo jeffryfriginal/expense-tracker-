@@ -377,6 +377,14 @@
   .amount.expense { color: var(--expense); }
   .amount.income { color: var(--income); }
 
+  .row-note {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-style: italic;
+  }
+
   td.actions { text-align: right; }
   .edit-btn {
     font-family: 'Inter', sans-serif;
@@ -564,6 +572,10 @@
         <button type="submit" class="add-btn" id="submitBtn">Add entry</button>
       </div>
     </div>
+    <div id="noteFieldWrap" style="display:none; margin-top:12px;">
+      <label for="noteInput">Note (optional)</label>
+      <input type="text" id="noteInput" placeholder="What was this for?" maxlength="200">
+    </div>
     <div class="status-msg" id="statusMsg"></div>
   </form>
 
@@ -644,6 +656,8 @@ document.querySelectorAll('.eye-toggle-small').forEach(btn => {
 const dateInput = document.getElementById('dateInput');
 const amountInput = document.getElementById('amountInput');
 const categoryInput = document.getElementById('categoryInput');
+const noteFieldWrap = document.getElementById('noteFieldWrap');
+const noteInput = document.getElementById('noteInput');
 const submitBtn = document.getElementById('submitBtn');
 const statusMsg = document.getElementById('statusMsg');
 const filterKind = document.getElementById('filterKind');
@@ -653,6 +667,14 @@ const filterTo = document.getElementById('filterTo');
 const showAllBtn = document.getElementById('showAllBtn');
 const recordsBody = document.getElementById('recordsBody');
 const configWarning = document.getElementById('configWarning');
+
+function updateNoteFieldVisibility() {
+  const show = currentKind === 'expense' && categoryInput.value === 'Other';
+  noteFieldWrap.style.display = show ? 'block' : 'none';
+  if (!show) noteInput.value = ''; // clear so a stray note can't attach to an unrelated entry later
+}
+
+categoryInput.addEventListener('change', updateNoteFieldVisibility);
 
 function checkConfig() {
   if (SCRIPT_URL.includes('PASTE_')) {
@@ -667,12 +689,19 @@ function money(n) {
   return '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
 function setKind(kind) {
   currentKind = kind;
   document.querySelectorAll('.kind-toggle button').forEach(b => {
     b.classList.toggle('active', b.dataset.kind === kind);
   });
   populateCategoryOptions(categoryInput, kind === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+  updateNoteFieldVisibility();
 }
 
 function populateCategoryOptions(select, list) {
@@ -781,7 +810,7 @@ function render() {
       <tr>
         <td>${r.date}</td>
         <td><span class="badge ${r.kind}">${r.kind}</span></td>
-        <td>${r.category}</td>
+        <td>${r.category}${r.note ? `<div class="row-note">${escapeHtml(r.note)}</div>` : ''}</td>
         <td class="num amount ${r.kind}">${r.kind === 'expense' ? '−' : '+'}${money(r.amount)}</td>
         <td class="actions"><button type="button" class="edit-btn" data-row="${r.row}" data-kind="${r.kind}" data-date="${r.date}" data-amount="${r.amount}" data-category="${r.category}">Edit</button></td>
       </tr>
@@ -888,7 +917,8 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
     kind: currentKind,
     date: dateInput.value,
     amount: amountInput.value,
-    category: categoryInput.value
+    category: categoryInput.value,
+    note: (!editingRow && currentKind === 'expense' && categoryInput.value === 'Other') ? noteInput.value.trim() : ''
   };
 
   try {
@@ -912,7 +942,8 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
     } else {
       statusMsg.textContent = 'Added.';
       amountInput.value = '';
-      records.push({ row: data.row, kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category, addedAt: Date.now(), _seq: recordSeq++ });
+      noteInput.value = '';
+      records.push({ row: data.row, kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category, addedAt: Date.now(), _seq: recordSeq++, note: payload.note });
     }
     render();
   } catch (err) {
