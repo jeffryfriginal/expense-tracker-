@@ -311,6 +311,50 @@
   .controls label { margin-bottom: 4px; }
   .controls select { min-width: 150px; }
 
+  .breakdown-panel {
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--line);
+    background: var(--paper-dim);
+  }
+  .breakdown-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 90px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12.5px;
+  }
+  .breakdown-row:last-child { margin-bottom: 0; }
+  .breakdown-label {
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .breakdown-track {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    height: 14px;
+    overflow: hidden;
+  }
+  .breakdown-fill {
+    height: 100%;
+  }
+  .breakdown-fill.expense { background: var(--expense); }
+  .breakdown-fill.income { background: var(--income); }
+  .breakdown-amount {
+    font-family: 'IBM Plex Mono', monospace;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .breakdown-empty {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
   .filtered-total {
     padding: 12px 32px;
     border-bottom: 1px solid var(--line);
@@ -605,6 +649,13 @@
     <div>
       <button type="button" class="calc-toggle" id="showAllBtn">Show All</button>
     </div>
+    <div>
+      <button type="button" class="calc-toggle" id="breakdownToggle">Breakdown</button>
+    </div>
+  </div>
+
+  <div class="breakdown-panel" id="breakdownPanel" style="display:none;">
+    <div id="breakdownContent"></div>
   </div>
 
   <div class="filtered-total" id="filteredTotal" style="display:none;">
@@ -848,6 +899,47 @@ function render() {
     document.getElementById('filteredTotalLabel').textContent =
       `Total — ${parts.join(', ')} (${filtered.length} ${filtered.length === 1 ? 'entry' : 'entries'})`;
   }
+
+  renderBreakdown(filtered, kindFilter);
+}
+
+const breakdownToggle = document.getElementById('breakdownToggle');
+const breakdownPanel = document.getElementById('breakdownPanel');
+breakdownToggle.addEventListener('click', () => {
+  const open = breakdownPanel.style.display !== 'none';
+  breakdownPanel.style.display = open ? 'none' : 'block';
+});
+
+function renderBreakdown(filtered, kindFilter) {
+  const content = document.getElementById('breakdownContent');
+
+  if (filtered.length === 0) {
+    content.innerHTML = '<div class="breakdown-empty">No entries match the current filters.</div>';
+    return;
+  }
+
+  // Group by category. If kind is 'all', disambiguate same-named categories
+  // (e.g. both an expense and income list could have "Other") by kind too.
+  const groups = {};
+  filtered.forEach(r => {
+    const key = kindFilter === 'all' ? `${r.category} — ${r.kind}` : r.category;
+    if (!groups[key]) groups[key] = { total: 0, kind: r.kind, label: key };
+    groups[key].total += Number(r.amount);
+  });
+
+  const rows = Object.values(groups).sort((a, b) => b.total - a.total);
+  const maxTotal = rows[0].total;
+
+  content.innerHTML = rows.map(g => {
+    const pct = maxTotal > 0 ? Math.round((g.total / maxTotal) * 100) : 0;
+    return `
+      <div class="breakdown-row">
+        <div class="breakdown-label">${escapeHtml(g.label)}</div>
+        <div class="breakdown-track"><div class="breakdown-fill ${g.kind}" style="width:${pct}%"></div></div>
+        <div class="breakdown-amount">${money(g.total)}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 let editingRow = null; // null = add mode; a sheet row number = edit mode
