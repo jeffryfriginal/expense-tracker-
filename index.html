@@ -975,6 +975,14 @@ function enterEditMode(record) {
   amountInput.value = record.amount;
   categoryInput.value = record.category;
 
+  // Programmatically setting a <select>'s value doesn't fire a 'change'
+  // event, so the note field's visibility never gets re-evaluated on its
+  // own here. Edits never save notes anyway (see doPost), so force it
+  // hidden and cleared rather than leaving stale state from before this
+  // edit was opened.
+  noteFieldWrap.style.display = 'none';
+  noteInput.value = '';
+
   editBanner.classList.add('open');
   submitBtn.textContent = 'Save changes';
   statusMsg.textContent = '';
@@ -1051,21 +1059,58 @@ const calcPanel = document.getElementById('calcPanel');
 const calcDisplay = document.getElementById('calcDisplay');
 calcToggle.addEventListener('click', () => calcPanel.classList.toggle('open'));
 
+let calcExpr = '';
+
+function evaluateCalcExpr(expr) {
+  if (!expr) return '';
+  // Only digits and the operators the calculator's own buttons can produce.
+  // Guards against evaluating something malformed (e.g. a trailing or
+  // doubled operator) rather than throwing mid-click.
+  if (!/^[0-9.+\-*/%]+$/.test(expr)) return null;
+  try {
+    const result = Function('"use strict"; return (' + expr.replace(/%/g, '/100*') + ')')();
+    if (!isFinite(result)) return null;
+    return String(Math.round(result * 100) / 100); // round off floating-point noise like 0.1+0.2
+  } catch (err) {
+    return null;
+  }
+}
+
 document.querySelectorAll('[data-calc]').forEach(btn => {
   btn.addEventListener('click', () => {
-    let key = btn.dataset.calc;
-    if (key === 'clear') calcExpr = '';
-    else if (key === 'back') calcExpr = calcExpr.slice(0, -1);
-    else if (key === '=') calcExpr = String(Function('"use strict"; return (' + calcExpr.replace(/%/g, '/100*') + ')')());
-    else calcExpr += key;
+    const key = btn.dataset.calc;
+    const isOperator = c => ['+', '-', '*', '/', '%'].includes(c);
+
+    if (key === 'clear') {
+      calcExpr = '';
+    } else if (key === 'back') {
+      calcExpr = calcExpr.slice(0, -1);
+    } else if (key === '=') {
+      const result = evaluateCalcExpr(calcExpr);
+      if (result !== null) calcExpr = result; // invalid expression (empty, trailing operator, etc) -> leave display as-is instead of crashing
+    } else if (isOperator(key)) {
+      if (calcExpr === '') return; // no leading operator
+      if (isOperator(calcExpr.slice(-1))) {
+        calcExpr = calcExpr.slice(0, -1) + key; // replace trailing operator instead of stacking a broken expression
+      } else {
+        calcExpr += key;
+      }
+    } else {
+      calcExpr += key;
+    }
     calcDisplay.textContent = calcExpr || '0';
   });
 });
 
-let calcExpr = '';
 document.getElementById('calcUseBtn').addEventListener('click', () => {
-  amountInput.value = calcExpr;
-  calcPanel.classList.remove('open');
+  const result = evaluateCalcExpr(calcExpr);
+  if (result !== null) {
+    amountInput.value = result;
+    calcExpr = '';
+    calcDisplay.textContent = '0';
+    calcPanel.classList.remove('open');
+    amountInput.focus();
+  }
 });
 
 dateInput.valueAsDate = new Date();
