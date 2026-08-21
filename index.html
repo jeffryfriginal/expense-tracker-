@@ -516,18 +516,25 @@
     .tally-item { border-right: none; border-bottom: 1px solid var(--line); }
     header, form, .controls { padding-left: 18px; padding-right: 18px; }
     .controls { flex-direction: column; align-items: flex-start; }
+  }
 
-    table, thead, tbody, th, td, tr { display: block; width: 100%; }
-    thead { display: none; }
-    table { padding: 12px 18px 4px; }
-    tr {
+  /* Table -> stacked cards. Scoped to .is-vivo (added via JS user-agent
+     check) rather than a generic width breakpoint, since this device's
+     CSS viewport width is identical to other phones that render the
+     table fine — see the JS UA check near the bottom of the file. */
+  @media (max-width: 640px) {
+    .is-vivo table, .is-vivo thead, .is-vivo tbody,
+    .is-vivo th, .is-vivo td, .is-vivo tr { display: block; width: 100%; }
+    .is-vivo thead { display: none; }
+    .is-vivo table { padding: 12px 18px 4px; }
+    .is-vivo tr {
       border: 1px solid var(--line);
       border-radius: 4px;
       padding: 10px 12px;
       margin-bottom: 10px;
       background: rgba(255,255,255,0.4);
     }
-    td {
+    .is-vivo td {
       border-bottom: none;
       padding: 4px 0;
       display: flex;
@@ -536,7 +543,7 @@
       gap: 12px;
       text-align: right;
     }
-    td::before {
+    .is-vivo td::before {
       content: attr(data-label);
       font-family: 'Inter', sans-serif;
       font-size: 10px;
@@ -546,11 +553,21 @@
       text-align: left;
       flex-shrink: 0;
     }
-    td.actions { justify-content: flex-end; }
-    td.actions::before { display: none; }
-    .row-note { text-align: right; }
+    .is-vivo td.actions { justify-content: flex-end; }
+    .is-vivo td.actions::before { display: none; }
+    .is-vivo .row-note { text-align: right; }
   }
 </style>
+<script>
+  // Tag Vivo devices specifically — their CSS viewport width is identical
+  // to other phones (both land on 360px despite different physical
+  // resolutions), so a width media query alone can't target just this
+  // device. UA sniffing is the only lever left. Runs before first paint
+  // to avoid a flash of the untransformed table layout.
+  if (/vivo/i.test(navigator.userAgent)) {
+    document.documentElement.classList.add('is-vivo');
+  }
+</script>
 </head>
 <body>
 
