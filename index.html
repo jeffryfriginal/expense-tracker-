@@ -514,60 +514,10 @@
     .field-row { grid-template-columns: 1fr; }
     .tally { grid-template-columns: 1fr; }
     .tally-item { border-right: none; border-bottom: 1px solid var(--line); }
-    header, form, .controls { padding-left: 18px; padding-right: 18px; }
+    header, form, .controls, th, td { padding-left: 18px; padding-right: 18px; }
     .controls { flex-direction: column; align-items: flex-start; }
   }
-
-  /* Table -> stacked cards. Scoped to .is-vivo (added via JS user-agent
-     check) rather than a generic width breakpoint, since this device's
-     CSS viewport width is identical to other phones that render the
-     table fine — see the JS UA check near the bottom of the file. */
-  @media (max-width: 640px) {
-    .is-vivo table, .is-vivo thead, .is-vivo tbody,
-    .is-vivo th, .is-vivo td, .is-vivo tr { display: block; width: 100%; }
-    .is-vivo thead { display: none; }
-    .is-vivo table { padding: 12px 18px 4px; }
-    .is-vivo tr {
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      padding: 10px 12px;
-      margin-bottom: 10px;
-      background: rgba(255,255,255,0.4);
-    }
-    .is-vivo td {
-      border-bottom: none;
-      padding: 4px 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      text-align: right;
-    }
-    .is-vivo td::before {
-      content: attr(data-label);
-      font-family: 'Inter', sans-serif;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-      text-align: left;
-      flex-shrink: 0;
-    }
-    .is-vivo td.actions { justify-content: flex-end; }
-    .is-vivo td.actions::before { display: none; }
-    .is-vivo .row-note { text-align: right; }
-  }
 </style>
-<script>
-  // Tag Vivo devices specifically — their CSS viewport width is identical
-  // to other phones (both land on 360px despite different physical
-  // resolutions), so a width media query alone can't target just this
-  // device. UA sniffing is the only lever left. Runs before first paint
-  // to avoid a flash of the untransformed table layout.
-  if (/vivo/i.test(navigator.userAgent)) {
-    document.documentElement.classList.add('is-vivo');
-  }
-</script>
 </head>
 <body>
 
@@ -910,10 +860,10 @@ function render() {
   } else {
     recordsBody.innerHTML = toShow.map(r => `
       <tr>
-        <td data-label="Date">${r.date}</td>
-        <td data-label="Kind"><span class="badge ${r.kind}">${r.kind}</span></td>
-        <td data-label="Category">${r.category}${r.note ? `<div class="row-note">${escapeHtml(r.note)}</div>` : ''}</td>
-        <td data-label="Amount" class="num amount ${r.kind}">${r.kind === 'expense' ? '−' : '+'}${money(r.amount)}</td>
+        <td>${r.date}</td>
+        <td><span class="badge ${r.kind}">${r.kind}</span></td>
+        <td>${r.category}${r.note ? `<div class="row-note">${escapeHtml(r.note)}</div>` : ''}</td>
+        <td class="num amount ${r.kind}">${r.kind === 'expense' ? '−' : '+'}${money(r.amount)}</td>
         <td class="actions"><button type="button" class="edit-btn" data-row="${r.row}" data-kind="${r.kind}" data-date="${r.date}" data-amount="${r.amount}" data-category="${r.category}">Edit</button></td>
       </tr>
     `).join('');
