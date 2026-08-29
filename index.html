@@ -419,6 +419,16 @@
   .badge.expense { background: var(--expense-bg); color: var(--expense); }
   .badge.income { background: var(--income-bg); color: var(--income); }
 
+  .cat-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 6px;
+    border: 1px solid rgba(0,0,0,0.25);
+    vertical-align: middle;
+  }
+
   .amount.expense { color: var(--expense); }
   .amount.income { color: var(--income); }
 
@@ -691,6 +701,16 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBbNk47VgaCjeb0nLij
 const EXPENSE_CATEGORIES = ['Internet/Load', 'Transportation', 'Food', 'Other', 'Mama', 'Tithes'];
 const INCOME_CATEGORIES = ['Church', 'School', 'Other'];
 
+// Expense-only category colors. Income intentionally has none.
+const CATEGORY_COLORS = {
+  'Internet/Load': '#FABF8F',
+  'Transportation': '#92CDDC',
+  'Food': '#F4C7C3',
+  'Other': '#A8D08D',
+  'Mama': '#B4A7D6',
+  'Tithes': '#F1C232'
+};
+
 let records = [];
 let currentKind = 'expense';
 let visible = { income: false, expenses: false, totalnet: false }; // each starts hidden, independently, on every fresh load
@@ -862,7 +882,7 @@ function render() {
       <tr>
         <td>${r.date}</td>
         <td><span class="badge ${r.kind}">${r.kind}</span></td>
-        <td>${r.category}${r.note ? `<div class="row-note">${escapeHtml(r.note)}</div>` : ''}</td>
+        <td>${r.kind === 'expense' && CATEGORY_COLORS[r.category] ? `<span class="cat-dot" style="background:${CATEGORY_COLORS[r.category]}"></span>` : ''}${r.category}${r.note ? `<div class="row-note">${escapeHtml(r.note)}</div>` : ''}</td>
         <td class="num amount ${r.kind}">${r.kind === 'expense' ? '−' : '+'}${money(r.amount)}</td>
         <td class="actions"><button type="button" class="edit-btn" data-row="${r.row}" data-kind="${r.kind}" data-date="${r.date}" data-amount="${r.amount}" data-category="${r.category}">Edit</button></td>
       </tr>
@@ -924,7 +944,7 @@ function renderBreakdown(filtered, kindFilter) {
   const groups = {};
   filtered.forEach(r => {
     const key = kindFilter === 'all' ? `${r.category} — ${r.kind}` : r.category;
-    if (!groups[key]) groups[key] = { total: 0, kind: r.kind, label: key };
+    if (!groups[key]) groups[key] = { total: 0, kind: r.kind, label: key, category: r.category };
     groups[key].total += Number(r.amount);
   });
 
@@ -933,10 +953,12 @@ function renderBreakdown(filtered, kindFilter) {
 
   content.innerHTML = rows.map(g => {
     const pct = maxTotal > 0 ? Math.round((g.total / maxTotal) * 100) : 0;
+    const fillColor = g.kind === 'expense' && CATEGORY_COLORS[g.category] ? CATEGORY_COLORS[g.category] : null;
+    const fillStyle = `width:${pct}%${fillColor ? `;background:${fillColor}` : ''}`;
     return `
       <div class="breakdown-row">
         <div class="breakdown-label">${escapeHtml(g.label)}</div>
-        <div class="breakdown-track"><div class="breakdown-fill ${g.kind}" style="width:${pct}%"></div></div>
+        <div class="breakdown-track"><div class="breakdown-fill ${g.kind}" style="${fillStyle}"></div></div>
         <div class="breakdown-amount">${money(g.total)}</div>
       </div>
     `;
