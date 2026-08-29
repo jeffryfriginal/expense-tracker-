@@ -425,7 +425,7 @@
     border-radius: 6px;
     border: 1px solid rgba(0,0,0,0.15);
   }
-  .cat-box-income {
+  .income-cat-cell {
     background: #A8D08D;
     color: #274E13;
   }
@@ -883,7 +883,7 @@ function render() {
       <tr>
         <td>${r.date}</td>
         <td><span class="badge ${r.kind}">${r.kind}</span></td>
-        <td>${r.kind === 'expense' && CATEGORY_COLORS[r.category] ? `<span class="cat-box" style="background:${CATEGORY_COLORS[r.category]}">${r.category}</span>` : (r.kind === 'income' ? `<span class="cat-box cat-box-income">${r.category}</span>` : r.category)}${r.note ? `<div class="row-note">${escapeHtml(r.note)}</div>` : ''}</td>
+        <td class="${r.kind === 'income' ? 'income-cat-cell' : ''}">${r.kind === 'expense' && CATEGORY_COLORS[r.category] ? `<span class="cat-box" style="background:${CATEGORY_COLORS[r.category]}">${r.category}</span>` : r.category}${r.note ? `<div class="row-note">${escapeHtml(r.note)}</div>` : ''}</td>
         <td class="num amount ${r.kind}">${r.kind === 'expense' ? '−' : '+'}${money(r.amount)}</td>
         <td class="actions"><button type="button" class="edit-btn" data-row="${r.row}" data-kind="${r.kind}" data-date="${r.date}" data-amount="${r.amount}" data-category="${r.category}">Edit</button></td>
       </tr>
