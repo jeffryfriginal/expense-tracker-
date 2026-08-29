@@ -419,14 +419,11 @@
   .badge.expense { background: var(--expense-bg); color: var(--expense); }
   .badge.income { background: var(--income-bg); color: var(--income); }
 
-  .cat-dot {
+  .cat-box {
     display: inline-block;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    margin-right: 6px;
-    border: 1px solid rgba(0,0,0,0.25);
-    vertical-align: middle;
+    padding: 3px 9px;
+    border-radius: 6px;
+    border: 1px solid rgba(0,0,0,0.15);
   }
 
   .amount.expense { color: var(--expense); }
@@ -882,7 +879,7 @@ function render() {
       <tr>
         <td>${r.date}</td>
         <td><span class="badge ${r.kind}">${r.kind}</span></td>
-        <td>${r.kind === 'expense' && CATEGORY_COLORS[r.category] ? `<span class="cat-dot" style="background:${CATEGORY_COLORS[r.category]}"></span>` : ''}${r.category}${r.note ? `<div class="row-note">${escapeHtml(r.note)}</div>` : ''}</td>
+        <td>${r.kind === 'expense' && CATEGORY_COLORS[r.category] ? `<span class="cat-box" style="background:${CATEGORY_COLORS[r.category]}">${r.category}</span>` : r.category}${r.note ? `<div class="row-note">${escapeHtml(r.note)}</div>` : ''}</td>
         <td class="num amount ${r.kind}">${r.kind === 'expense' ? '−' : '+'}${money(r.amount)}</td>
         <td class="actions"><button type="button" class="edit-btn" data-row="${r.row}" data-kind="${r.kind}" data-date="${r.date}" data-amount="${r.amount}" data-category="${r.category}">Edit</button></td>
       </tr>
