@@ -1140,6 +1140,37 @@ document.getElementById('calcUseBtn').addEventListener('click', () => {
   }
 });
 
+// ---- Numpad / keyboard controls for the calculator ----
+// Only active while the calc panel is open, and only when focus isn't
+// sitting in a text-type field (date/amount/category/note), so this
+// never hijacks normal typing. e.key normalizes numpad and top-row keys
+// to the same character, so one map covers both. preventDefault on a
+// match also stops Enter from double-firing as both "=" and a submit
+// of entryForm, which the calc panel lives inside of.
+function isTypingTarget(el) {
+  return el && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!calcPanel.classList.contains('open')) return;
+  if (isTypingTarget(document.activeElement)) return;
+
+  const keyMap = {
+    '0':'0','1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9',
+    '.':'.', ',':'.',
+    '+':'+', '-':'-', '*':'*', '/':'/', '%':'%',
+    'Enter':'=', '=':'=',
+    'Backspace':'back',
+    'Escape':'clear', 'c':'clear', 'C':'clear'
+  };
+
+  const action = keyMap[e.key];
+  if (!action) return;
+
+  e.preventDefault();
+  document.querySelector(`[data-calc="${action}"]`)?.click();
+});
+
 dateInput.valueAsDate = new Date();
 setKind('expense');
 populateFilterCategories();
