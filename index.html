@@ -977,12 +977,15 @@ const cancelEditBtn = document.getElementById('cancelEditBtn');
 recordsBody.addEventListener('click', (e) => {
   const btn = e.target.closest('.edit-btn');
   if (!btn) return;
+  const rowNum = Number(btn.dataset.row);
+  const full = records.find(r => r.row === rowNum && r.kind === btn.dataset.kind);
   enterEditMode({
-    row: Number(btn.dataset.row),
+    row: rowNum,
     kind: btn.dataset.kind,
     date: btn.dataset.date,
     amount: btn.dataset.amount,
-    category: btn.dataset.category
+    category: btn.dataset.category,
+    note: (full && full.note) || ''
   });
 });
 
@@ -1002,13 +1005,12 @@ function enterEditMode(record) {
   amountInput.value = record.amount;
   categoryInput.value = record.category;
 
-  // Programmatically setting a <select>'s value doesn't fire a 'change'
-  // event, so the note field's visibility never gets re-evaluated on its
-  // own here. Edits never save notes anyway (see doPost), so force it
-  // hidden and cleared rather than leaving stale state from before this
-  // edit was opened.
-  noteFieldWrap.style.display = 'none';
-  noteInput.value = '';
+  // Programmatically setting a <select>'s value doesn't fire 'change',
+  // so re-evaluate the note field's visibility by hand, then fill it in.
+  updateNoteFieldVisibility();
+  if (currentKind === 'expense' && record.category === 'Other') {
+    noteInput.value = record.note || '';
+  }
 
   editBanner.classList.add('open');
   submitBtn.textContent = 'Save changes';
@@ -1045,7 +1047,7 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
     date: dateInput.value,
     amount: amountInput.value,
     category: categoryInput.value,
-    note: (!editingRow && currentKind === 'expense' && categoryInput.value === 'Other') ? noteInput.value.trim() : ''
+    note: (currentKind === 'expense' && categoryInput.value === 'Other') ? noteInput.value.trim() : ''
   };
 
   try {
@@ -1063,6 +1065,7 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
         target.date = payload.date;
         target.amount = Number(payload.amount);
         target.category = payload.category;
+        target.note = payload.note;
       }
       statusMsg.textContent = 'Saved.';
       exitEditMode();
