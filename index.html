@@ -527,12 +527,12 @@
   /* ---- PDF export (print-only) ---- */
   #printArea { display: none; }
 
-  @page { size: 8.5in 11in; margin: 0.5in; }
+  @page { size: 8.5in 11in; margin: 0.5in 0.75in; }
 
   @media print {
     html, body { background: #fff !important; padding: 0 !important; min-height: 0; }
     body > *:not(#printArea) { display: none !important; }
-    #printArea { display: block; color: #1B2430; font-family: 'Inter', sans-serif; }
+    #printArea { display: block; color: #1B2430; font-family: 'Inter', sans-serif; padding: 0 0.4in; }
     #printArea, #printArea * {
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
