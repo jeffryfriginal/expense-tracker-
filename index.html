@@ -543,6 +543,8 @@
     .pr-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; table-layout: fixed; }
     .pr-table thead { display: table-header-group; }
     .pr-table th { background: #1F4E8C; color: #fff; text-align: left; padding: 6px 8px; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.05em; border: none; }
+    .pr-table thead th { padding-top: 0.4in; }
+    .pr-table tfoot td { height: 0.4in; border: none; background: #fff; padding: 0; }
     .pr-table th.num, .pr-table td.num { text-align: right; }
     .pr-table td { padding: 5px 8px; border: none; vertical-align: top; }
     .pr-table tr { page-break-inside: avoid; }
@@ -1168,6 +1170,7 @@ document.getElementById('exportPdfBtn').addEventListener('click', () => {
         <tr class="pr-total"><td colspan="3">Total</td><td class="num">${money(totalIncome)}</td><td class="num">${money(totalExpense)}</td></tr>
         <tr class="pr-net"><td colspan="3">Net</td><td class="num" colspan="2">${money(totalIncome - totalExpense)}</td></tr>
       </tbody>
+      <tfoot><tr><td colspan="5"></td></tr></tfoot>
     </table>`;
 
   const prevTitle = document.title;
