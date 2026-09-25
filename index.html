@@ -524,6 +524,38 @@
     font-size: 13px;
   }
 
+  /* ---- PDF export (print-only) ---- */
+  #printArea { display: none; }
+
+  @page { size: 8.5in 11in; margin: 0.5in; }
+
+  @media print {
+    html, body { background: #fff !important; padding: 0 !important; min-height: 0; }
+    body > *:not(#printArea) { display: none !important; }
+    #printArea { display: block; color: #1B2430; font-family: 'Inter', sans-serif; }
+    #printArea, #printArea * {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .pr-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #1B2430; padding-bottom: 6px; margin-bottom: 10px; }
+    .pr-head h2 { font-family: 'Fraunces', serif; font-size: 20pt; margin: 0; }
+    .pr-head .pr-range { font-size: 10pt; color: #4a4a4a; text-align: right; }
+    .pr-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; table-layout: fixed; }
+    .pr-table thead { display: table-header-group; }
+    .pr-table th { background: #1F4E8C; color: #fff; text-align: left; padding: 6px 8px; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.05em; border: none; }
+    .pr-table th.num, .pr-table td.num { text-align: right; }
+    .pr-table td { padding: 5px 8px; border: none; vertical-align: top; }
+    .pr-table tr { page-break-inside: avoid; }
+    .pr-table tbody tr:nth-child(odd) td { background: #BCD4F0; }
+    .pr-table tbody tr:nth-child(even) td { background: #E4EEFA; }
+    .pr-table td.num { font-family: 'IBM Plex Mono', monospace; }
+    .pr-table td.inc { color: #1E5B3E; }
+    .pr-table td.exp { color: #8E2F23; }
+    .pr-note { font-size: 8pt; font-style: italic; color: #555; margin-top: 1px; }
+    .pr-table tr.pr-total td { background: #1F4E8C !important; color: #fff !important; font-weight: 600; padding: 8px; }
+    .pr-table tr.pr-net td { background: #fff !important; border-top: 2px solid #1F4E8C; font-weight: 600; padding: 8px; }
+  }
+
   @media (max-width: 640px) {
     .field-row { grid-template-columns: 1fr; }
     .tally { grid-template-columns: 1fr; }
@@ -667,6 +699,9 @@
     <div>
       <button type="button" class="calc-toggle" id="breakdownToggle">Breakdown</button>
     </div>
+    <div>
+      <button type="button" class="calc-toggle" id="exportPdfBtn">Export PDF</button>
+    </div>
   </div>
 
   <div class="breakdown-panel" id="breakdownPanel" style="display:none;">
@@ -696,6 +731,8 @@
     <button type="button" class="show-more-btn" id="showMoreBtn">Show more</button>
   </div>
 </div>
+
+<div id="printArea"></div>
 
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBbNk47VgaCjeb0nLijbxzzLEUIOj_Syp5TZq9KYipsQQd5kKLtan537hX9DS4uhfuxA/exec';
@@ -1082,6 +1119,64 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
     submitBtn.disabled = false;
     submitBtn.textContent = editingRow ? 'Save changes' : 'Add entry';
   }
+});
+
+// ---- PDF export: uses the From/To date range only (kind/category filters are ignored) ----
+document.getElementById('exportPdfBtn').addEventListener('click', () => {
+  const from = filterFrom.value;
+  const to = filterTo.value;
+
+  const rows = records.filter(r => (!from || r.date >= from) && (!to || r.date <= to));
+  rows.sort((a, b) => {
+    const byDate = b.date.localeCompare(a.date);
+    if (byDate !== 0) return byDate;
+    const byAddedAt = (b.addedAt || 0) - (a.addedAt || 0);
+    if (byAddedAt !== 0) return byAddedAt;
+    return (b._seq || 0) - (a._seq || 0);
+  });
+
+  if (rows.length === 0) {
+    alert('No entries in this date range.');
+    return;
+  }
+
+  const rangeLabel = from && to ? `${from} to ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : 'All dates';
+  const totalIncome = rows.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
+  const totalExpense = rows.filter(r => r.kind === 'expense').reduce((s, r) => s + Number(r.amount), 0);
+
+  const body = rows.map(r => `
+    <tr>
+      <td>${r.date}</td>
+      <td>${escapeHtml(String(r.category))}${r.note ? `<div class="pr-note">${escapeHtml(r.note)}</div>` : ''}</td>
+      <td>${r.kind === 'income' ? 'Income' : 'Expense'}</td>
+      <td class="num inc">${r.kind === 'income' ? money(r.amount) : ''}</td>
+      <td class="num exp">${r.kind === 'expense' ? money(r.amount) : ''}</td>
+    </tr>`).join('');
+
+  document.getElementById('printArea').innerHTML = `
+    <div class="pr-head">
+      <h2>Ledger</h2>
+      <div class="pr-range">${escapeHtml(rangeLabel)}<br>${rows.length} ${rows.length === 1 ? 'entry' : 'entries'}</div>
+    </div>
+    <table class="pr-table">
+      <colgroup><col style="width:16%"><col style="width:32%"><col style="width:14%"><col style="width:19%"><col style="width:19%"></colgroup>
+      <thead>
+        <tr><th>Date</th><th>Category</th><th>Type</th><th class="num">Income</th><th class="num">Expense</th></tr>
+      </thead>
+      <tbody>
+        ${body}
+        <tr class="pr-total"><td colspan="3">Total</td><td class="num">${money(totalIncome)}</td><td class="num">${money(totalExpense)}</td></tr>
+        <tr class="pr-net"><td colspan="3">Net</td><td class="num" colspan="2">${money(totalIncome - totalExpense)}</td></tr>
+      </tbody>
+    </table>`;
+
+  const prevTitle = document.title;
+  document.title = 'Ledger ' + rangeLabel; // becomes the default PDF filename
+  window.addEventListener('afterprint', () => {
+    document.title = prevTitle;
+    document.getElementById('printArea').innerHTML = '';
+  }, { once: true });
+  window.print();
 });
 
 const calcToggle = document.getElementById('calcToggle');
