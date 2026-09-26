@@ -881,7 +881,16 @@ showAllBtn.addEventListener('click', () => {
 let recordSeq = 0;
 
 async function loadRecords(password) {
-  const res = await fetch(SCRIPT_URL + '?password=' + encodeURIComponent(password));
+  // Switched from GET (?password=... in the URL) to POST. GET left the
+  // password sitting in browser history and Apps Script's execution logs;
+  // this puts it in the request body instead, matching how add/edit already
+  // send it. The backend's doGet no longer does anything useful — reads go
+  // through doPost's "load" action now.
+  const res = await fetch(SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight; Apps Script doesn't handle OPTIONS
+    body: JSON.stringify({ password, action: 'load' })
+  });
   const data = await res.json();
   if (data.error) {
     throw new Error(data.error);
