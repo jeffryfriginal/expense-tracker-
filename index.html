@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ledger</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#12151B">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -880,21 +888,43 @@ showAllBtn.addEventListener('click', () => {
 
 let recordSeq = 0;
 
-async function loadRecords(password) {
-  // Switched from GET (?password=... in the URL) to POST. GET left the
-  // password sitting in browser history and Apps Script's execution logs;
-  // this puts it in the request body instead, matching how add/edit already
-  // send it. The backend's doGet no longer does anything useful — reads go
-  // through doPost's "load" action now.
-  const res = await fetch(SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight; Apps Script doesn't handle OPTIONS
-    body: JSON.stringify({ password, action: 'load' })
-  });
-  const data = await res.json();
-  if (data.error) {
-    throw new Error(data.error);
+// Every call to the Apps Script goes through here so failures can be told apart:
+//   kind 'network' = fetch itself threw (no connection, DNS, blocked); the server never answered
+//   kind 'parse'   = server answered but not with JSON (e.g. a Google HTML error page)
+//   kind 'server'  = server answered with { error: ... } (wrong password, bad input, etc.)
+async function postToScript(payload) {
+  let res;
+  try {
+    res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight; Apps Script doesn't handle OPTIONS
+      body: JSON.stringify(payload)
+    });
+  } catch (e) {
+    const err = new Error('Network error');
+    err.kind = 'network';
+    throw err;
   }
+  let data;
+  try {
+    data = await res.json();
+  } catch (e) {
+    const err = new Error('Unreadable response');
+    err.kind = 'parse';
+    throw err;
+  }
+  if (data.error) {
+    const err = new Error(data.error);
+    err.kind = 'server';
+    throw err;
+  }
+  return data;
+}
+
+async function loadRecords(password) {
+  // POST rather than GET so the password stays out of URLs, history and logs.
+  // Reads go through doPost's "load" action.
+  const data = await postToScript({ password, action: 'load' });
   records = data.records || [];
   records.forEach(r => { r._seq = recordSeq++; });
   render();
@@ -1099,13 +1129,7 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
   };
 
   try {
-    const res = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight; Apps Script doesn't handle OPTIONS
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const data = await postToScript(payload);
 
     if (editingRow) {
       const target = records.find(r => r.row === editingRow && r.kind === payload.kind);
@@ -1125,7 +1149,15 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
     }
     render();
   } catch (err) {
-    statusMsg.textContent = 'Failed: ' + err.message;
+    if (err.kind === 'network') {
+      statusMsg.textContent = "Can't reach the server. Nothing was saved. Check your connection and try again.";
+    } else if (err.kind === 'parse') {
+      // The server may have written the row before the response got mangled,
+      // so don't tell the user to blindly retry.
+      statusMsg.textContent = "Couldn't confirm it saved. Refresh and check before adding it again.";
+    } else {
+      statusMsg.textContent = 'Failed: ' + err.message;
+    }
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = editingRow ? 'Save changes' : 'Add entry';
@@ -1312,13 +1344,26 @@ if (!checkConfig()) {
       loginScreen.style.display = 'none';
       mainContent.style.display = 'block';
     } catch (err) {
-      loginError.textContent = 'Wrong password.';
+      if (err.kind === 'network') {
+        loginError.textContent = "Can't reach the server. Check your connection and try again.";
+      } else if (err.kind === 'parse') {
+        loginError.textContent = 'Got an unexpected reply from the server. Try again in a moment.';
+      } else {
+        loginError.textContent = 'Wrong password.';
+      }
       loginPassword.value = '';
       loginPassword.focus();
     } finally {
       loginSubmitBtn.disabled = false;
       loginSubmitBtn.textContent = 'Unlock';
     }
+  });
+}
+
+// ---- PWA: service worker (needs HTTPS; GitHub Pages is fine) ----
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* app works fine without it */ });
   });
 }
 </script>
