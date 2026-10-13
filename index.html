@@ -1117,6 +1117,8 @@ function enterEditMode(record) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Expense deletes also close the gap in the sheet (server shifts cells up),
+// which renumbers rows below it, hence the full reload after one.
 // Delete is two taps on purpose: the first arms it, the second (within 4s)
 // confirms. Avoids native confirm() dialogs, which behave inconsistently in
 // an installed app.
@@ -1147,11 +1149,34 @@ deleteEntryBtn.addEventListener('click', async () => {
   const row = editingRow;
   const kind = currentKind; // locked while editing
   try {
-    await postToScript({ password: sessionPassword, action: 'delete', row, kind });
-    records = records.filter(r => !(r.row === row && r.kind === kind));
-    exitEditMode();
-    statusMsg.textContent = 'Deleted.';
-    render();
+    const payload = { password: sessionPassword, action: 'delete', row, kind };
+    if (kind === 'expense') {
+      // Ask the server to close the gap too. It re-checks these values
+      // against the sheet first, so a stale page can never shift the wrong row.
+      const rec = records.find(r => r.row === row && r.kind === kind);
+      payload.shiftUp = true;
+      payload.expect = { date: rec.date, amount: rec.amount, category: rec.category };
+    }
+    const result = await postToScript(payload);
+
+    if (kind === 'expense') {
+      // Rows below the deleted one may have moved up, so every row number
+      // this page holds could now be wrong. Reload instead of patching locally.
+      exitEditMode();
+      try {
+        await loadRecords(sessionPassword);
+        statusMsg.textContent = result.shifted
+          ? 'Deleted.'
+          : 'Deleted. A blank row was left because income entries share those rows.';
+      } catch (reloadErr) {
+        statusMsg.textContent = "Deleted, but couldn't refresh the list. Reload the page before editing anything else.";
+      }
+    } else {
+      records = records.filter(r => !(r.row === row && r.kind === kind));
+      exitEditMode();
+      statusMsg.textContent = 'Deleted.';
+      render();
+    }
   } catch (err) {
     resetDeleteBtn();
     if (err.kind === 'network') {
