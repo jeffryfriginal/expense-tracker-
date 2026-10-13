@@ -4,12 +4,22 @@ Static site (GitHub Pages) that reads and writes to your existing Google
 Sheet through a small Apps Script backend. Installable as an app on your
 phone. No database, no build step.
 
+> **Heads up:** this was built around my own Google Sheet, so the layout in
+> `Code.gs` (which columns hold what, which tab, which rows) matches mine and
+> might not match yours. Your mileage may vary. If your sheet is laid out
+> differently, you'll need to adjust the column numbers and row settings in
+> `Code.gs` to fit it, or set your sheet up the same way as described below.
+
 ## Features
 
 **Entries**
 - Add expenses and income with a date, amount and category.
 - Edit any existing entry's date, amount, category and note. The kind
   (expense or income) is locked when editing.
+- Delete an entry from edit mode. It takes two taps, so you can't do it by
+  accident. Deleting an expense also closes the gap by shifting the rows
+  below it up, as long as that's safe (see limitations). Deleting income
+  just clears the entry.
 - Optional note on expenses categorized as "Other", shown under the
   category in the table.
 - Built-in calculator (+, −, ×, ÷, %) with a "Use this amount" button that
@@ -159,8 +169,15 @@ push, and reopen the app.
   (income) onward, reusing any blank rows after that. Rows above those
   points are never reused. Change `EXPENSE_WRITE_SCAN_START` and
   `INCOME_WRITE_SCAN_START` in `Code.gs` if your sheet's layout changes.
-- The backend has a delete action, but the site has no delete button yet.
-  To remove an entry, clear its row in the sheet.
+- Deleting an expense shifts columns A to F up to close the gap, but only
+  when no income dates are in column F at or below that row. If there are
+  (for example when deleting an older entry), it just clears the entry and
+  leaves a blank row, and the site tells you so. The server also checks the
+  row still holds the entry you clicked, and refuses if your page is out of
+  date. Shifting moves everything in A to F below the deleted row, so
+  anything else you keep there moves too, and Sheets may shrink formula
+  ranges that cover it. Deleting can't be undone from the site. Use
+  Google Sheets' version history.
 - The site computes totals itself from raw rows. It does **not** touch your
   sheet's existing monthly breakdown formulas or Net cell. Those stay
   exactly as they were, and won't auto-include new entries added from the
