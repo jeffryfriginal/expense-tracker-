@@ -481,6 +481,23 @@
     font-size: 12px;
   }
   .edit-banner.open { display: flex; }
+  .edit-banner { gap: 10px; flex-wrap: wrap; }
+  .edit-banner .banner-actions { display: flex; align-items: center; gap: 14px; }
+  .edit-banner .delete-entry {
+    background: none;
+    border: 1px solid var(--expense);
+    border-radius: 3px;
+    padding: 4px 10px;
+    color: var(--expense);
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .edit-banner .delete-entry.armed { background: var(--expense); color: #fff; }
+  .edit-banner .delete-entry:disabled { opacity: 0.5; cursor: default; }
   .edit-banner .cancel-edit {
     background: none;
     border: none;
@@ -618,7 +635,10 @@
   <form id="entryForm">
     <div class="edit-banner" id="editBanner">
       <span>Editing an existing entry — kind can't be changed here.</span>
-      <button type="button" class="cancel-edit" id="cancelEditBtn">Cancel edit</button>
+      <div class="banner-actions">
+        <button type="button" class="delete-entry" id="deleteEntryBtn">Delete</button>
+        <button type="button" class="cancel-edit" id="cancelEditBtn">Cancel edit</button>
+      </div>
     </div>
     <div class="kind-toggle" id="kindToggle">
       <button type="button" data-kind="expense" class="active">Expense</button>
@@ -1068,6 +1088,7 @@ recordsBody.addEventListener('click', (e) => {
 });
 
 function enterEditMode(record) {
+  resetDeleteBtn();
   editingRow = record.row;
   currentKind = record.kind;
 
@@ -1096,7 +1117,55 @@ function enterEditMode(record) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Delete is two taps on purpose: the first arms it, the second (within 4s)
+// confirms. Avoids native confirm() dialogs, which behave inconsistently in
+// an installed app.
+const deleteEntryBtn = document.getElementById('deleteEntryBtn');
+let deleteArmTimer = null;
+
+function resetDeleteBtn() {
+  clearTimeout(deleteArmTimer);
+  deleteArmTimer = null;
+  deleteEntryBtn.textContent = 'Delete';
+  deleteEntryBtn.classList.remove('armed');
+  deleteEntryBtn.disabled = false;
+}
+
+deleteEntryBtn.addEventListener('click', async () => {
+  if (!editingRow) return;
+
+  if (!deleteEntryBtn.classList.contains('armed')) {
+    deleteEntryBtn.classList.add('armed');
+    deleteEntryBtn.textContent = 'Tap again to delete';
+    deleteArmTimer = setTimeout(resetDeleteBtn, 4000);
+    return;
+  }
+
+  clearTimeout(deleteArmTimer);
+  deleteEntryBtn.disabled = true;
+  deleteEntryBtn.textContent = 'Deleting…';
+  const row = editingRow;
+  const kind = currentKind; // locked while editing
+  try {
+    await postToScript({ password: sessionPassword, action: 'delete', row, kind });
+    records = records.filter(r => !(r.row === row && r.kind === kind));
+    exitEditMode();
+    statusMsg.textContent = 'Deleted.';
+    render();
+  } catch (err) {
+    resetDeleteBtn();
+    if (err.kind === 'network') {
+      statusMsg.textContent = "Can't reach the server. Nothing was deleted. Check your connection and try again.";
+    } else if (err.kind === 'parse') {
+      statusMsg.textContent = "Couldn't confirm the delete. Refresh and check before trying again.";
+    } else {
+      statusMsg.textContent = 'Failed: ' + err.message;
+    }
+  }
+});
+
 function exitEditMode() {
+  resetDeleteBtn();
   editingRow = null;
   kindToggle.style.pointerEvents = '';
   kindToggle.style.opacity = '';
