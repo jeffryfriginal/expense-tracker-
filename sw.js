@@ -17,7 +17,12 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))))
+      // Prefix check is deliberate: Cache Storage is shared by every app on this origin (e.g. devotion), so only delete our own old ledger-* caches.
+      .then((keys) => Promise.all(
+        keys
+          .filter((k) => k.startsWith('ledger-') && k !== CACHE_VERSION)
+          .map((k) => caches.delete(k))
+      ))
       .then(() => self.clients.claim())
   );
 });
