@@ -1320,7 +1320,19 @@ document.getElementById('exportPdfBtn').addEventListener('click', () => {
 const calcToggle = document.getElementById('calcToggle');
 const calcPanel = document.getElementById('calcPanel');
 const calcDisplay = document.getElementById('calcDisplay');
-calcToggle.addEventListener('click', () => calcPanel.classList.toggle('open'));
+calcToggle.addEventListener('click', () => {
+  const opening = !calcPanel.classList.contains('open');
+  calcPanel.classList.toggle('open');
+  // Opening the calculator starts it from whatever is in the Amount field
+  // (e.g. the entry being edited). An empty field leaves the calculator as it was.
+  if (opening) {
+    const current = amountInput.value;
+    if (current !== '' && isFinite(Number(current))) {
+      calcExpr = String(Number(current));
+      calcDisplay.textContent = calcExpr;
+    }
+  }
+});
 
 let calcExpr = '';
 
