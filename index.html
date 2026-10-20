@@ -634,7 +634,7 @@
 
   <form id="entryForm">
     <div class="edit-banner" id="editBanner">
-      <span>Editing an existing entry — kind can't be changed here.</span>
+      <span id="editBannerText">Editing an existing entry. Switch Expense/Income below to move it to the other list.</span>
       <div class="banner-actions">
         <button type="button" class="delete-entry" id="deleteEntryBtn">Delete</button>
         <button type="button" class="cancel-edit" id="cancelEditBtn">Cancel edit</button>
@@ -858,7 +858,18 @@ function populateCategoryOptions(select, list) {
 }
 
 document.querySelectorAll('.kind-toggle button').forEach(btn => {
-  btn.addEventListener('click', () => setKind(btn.dataset.kind));
+  btn.addEventListener('click', () => {
+    setKind(btn.dataset.kind);
+    if (editingRow && editingOriginal && currentKind === editingOriginal.kind) {
+      // Switched back to the entry's own kind: put its category and note back.
+      categoryInput.value = editingOriginal.category;
+      updateNoteFieldVisibility();
+      if (currentKind === 'expense' && editingOriginal.category === 'Other') {
+        noteInput.value = editingOriginal.note || '';
+      }
+    }
+    refreshEditUi();
+  });
 });
 
 function populateFilterCategories() {
@@ -1068,6 +1079,23 @@ function renderBreakdown(filtered, kindFilter) {
 }
 
 let editingRow = null; // null = add mode; a sheet row number = edit mode
+let editingOriginal = null; // the entry as it was when Edit was tapped (kind may be changed in the form)
+const editBannerText = document.getElementById('editBannerText');
+
+// Keeps the banner and the submit button honest about whether this save is a
+// plain edit or a move to the other list.
+function refreshEditUi() {
+  if (!editingRow || !editingOriginal) return;
+  const moving = currentKind !== editingOriginal.kind;
+  if (moving) {
+    const to = currentKind === 'income' ? 'Income' : 'Expenses';
+    editBannerText.textContent = 'This will move the entry to ' + to + '. Pick its new category below.';
+    submitBtn.textContent = 'Move to ' + to;
+  } else {
+    editBannerText.textContent = 'Editing an existing entry. Switch Expense/Income below to move it to the other list.';
+    submitBtn.textContent = 'Save changes';
+  }
+}
 const editBanner = document.getElementById('editBanner');
 const kindToggle = document.getElementById('kindToggle');
 const cancelEditBtn = document.getElementById('cancelEditBtn');
@@ -1090,14 +1118,15 @@ recordsBody.addEventListener('click', (e) => {
 function enterEditMode(record) {
   resetDeleteBtn();
   editingRow = record.row;
+  editingOriginal = {
+    row: record.row, kind: record.kind, date: record.date,
+    amount: Number(record.amount), category: record.category, note: record.note || ''
+  };
   currentKind = record.kind;
 
-  // lock the kind toggle visually and functionally, since kind can't change on edit
   document.querySelectorAll('.kind-toggle button').forEach(b => {
     b.classList.toggle('active', b.dataset.kind === record.kind);
   });
-  kindToggle.style.pointerEvents = 'none';
-  kindToggle.style.opacity = '0.5';
 
   populateCategoryOptions(categoryInput, record.kind === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
   dateInput.value = record.date;
@@ -1112,7 +1141,7 @@ function enterEditMode(record) {
   }
 
   editBanner.classList.add('open');
-  submitBtn.textContent = 'Save changes';
+  refreshEditUi();
   statusMsg.textContent = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1147,7 +1176,7 @@ deleteEntryBtn.addEventListener('click', async () => {
   deleteEntryBtn.disabled = true;
   deleteEntryBtn.textContent = 'Deleting…';
   const row = editingRow;
-  const kind = currentKind; // locked while editing
+  const kind = editingOriginal.kind; // the toggle may now show the other kind, but Delete removes the entry as it is in the sheet
   try {
     const payload = { password: sessionPassword, action: 'delete', row, kind };
     if (kind === 'expense') {
@@ -1192,8 +1221,7 @@ deleteEntryBtn.addEventListener('click', async () => {
 function exitEditMode() {
   resetDeleteBtn();
   editingRow = null;
-  kindToggle.style.pointerEvents = '';
-  kindToggle.style.opacity = '';
+  editingOriginal = null;
   editBanner.classList.remove('open');
   submitBtn.textContent = 'Add entry';
   amountInput.value = '';
@@ -1211,19 +1239,41 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
   submitBtn.disabled = true;
   submitBtn.textContent = editingRow ? 'Saving…' : 'Adding…';
 
+  const moving = !!editingRow && !!editingOriginal && currentKind !== editingOriginal.kind;
+
   const payload = {
     password: sessionPassword,
-    action: editingRow ? 'edit' : 'add',
+    action: moving ? 'convert' : (editingRow ? 'edit' : 'add'),
     row: editingRow || undefined,
-    kind: currentKind,
+    kind: moving ? editingOriginal.kind : currentKind,
     date: dateInput.value,
     amount: amountInput.value,
     category: categoryInput.value,
     note: (currentKind === 'expense' && categoryInput.value === 'Other') ? noteInput.value.trim() : ''
   };
+  if (moving) {
+    payload.toKind = currentKind;
+    // Server re-checks these against the sheet so a stale page can't move the wrong row.
+    payload.expect = { date: editingOriginal.date, amount: editingOriginal.amount, category: editingOriginal.category };
+  }
 
   try {
     const data = await postToScript(payload);
+
+    if (moving) {
+      // Rows in both lists may have been renumbered, so reload instead of patching locally.
+      const toLabel = currentKind === 'income' ? 'Income' : 'Expenses';
+      const note = data.shifted === false && payload.kind === 'expense'
+        ? ' A blank row was left in the expense list because income entries share those rows.' : '';
+      exitEditMode();
+      try {
+        await loadRecords(sessionPassword);
+        statusMsg.textContent = 'Moved to ' + toLabel + '.' + note;
+      } catch (reloadErr) {
+        statusMsg.textContent = "Moved, but couldn't refresh the list. Reload the page before editing anything else.";
+      }
+      return;
+    }
 
     if (editingRow) {
       const target = records.find(r => r.row === editingRow && r.kind === payload.kind);
@@ -1248,13 +1298,15 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
     } else if (err.kind === 'parse') {
       // The server may have written the row before the response got mangled,
       // so don't tell the user to blindly retry.
-      statusMsg.textContent = "Couldn't confirm it saved. Refresh and check before adding it again.";
+      statusMsg.textContent = moving
+        ? "Couldn't confirm the move. Refresh and check both lists before trying again."
+        : "Couldn't confirm it saved. Refresh and check before adding it again.";
     } else {
       statusMsg.textContent = 'Failed: ' + err.message;
     }
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = editingRow ? 'Save changes' : 'Add entry';
+    if (editingRow) refreshEditUi(); else submitBtn.textContent = 'Add entry';
   }
 });
 
