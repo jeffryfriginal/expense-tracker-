@@ -318,6 +318,8 @@
   }
 
   .controls label { margin-bottom: 4px; }
+  .presets { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+  .presets .calc-toggle { margin-left: 0; }
   .controls select { min-width: 150px; }
 
   .breakdown-panel {
@@ -327,7 +329,7 @@
   }
   .breakdown-row {
     display: grid;
-    grid-template-columns: 110px 1fr 90px;
+    grid-template-columns: 110px 1fr 96px 44px;
     align-items: center;
     gap: 10px;
     margin-bottom: 8px;
@@ -356,6 +358,13 @@
   .breakdown-amount {
     font-family: 'IBM Plex Mono', monospace;
     text-align: right;
+    white-space: nowrap;
+  }
+  .breakdown-pct {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    text-align: right;
+    color: var(--muted);
     white-space: nowrap;
   }
   .breakdown-empty {
@@ -616,17 +625,17 @@
 
   <div class="tally">
     <div class="tally-item">
-      <div class="tally-label">Income</div>
+      <div class="tally-label" id="incomeLabel">Income</div>
       <div class="tally-value income" id="totalIncome">₱0.00</div>
       <button type="button" class="eye-toggle-small" data-target="income" title="Show">👁</button>
     </div>
     <div class="tally-item">
-      <div class="tally-label">Expenses</div>
+      <div class="tally-label" id="expenseLabel">Expenses</div>
       <div class="tally-value expense" id="totalExpense">₱0.00</div>
       <button type="button" class="eye-toggle-small" data-target="expenses" title="Show">👁</button>
     </div>
     <div class="tally-item">
-      <div class="tally-label">Net</div>
+      <div class="tally-label" id="netLabel">Net</div>
       <div class="tally-value" id="totalNet">₱0.00</div>
       <button type="button" class="eye-toggle-small" data-target="totalnet" title="Show">👁</button>
     </div>
@@ -701,6 +710,12 @@
   </form>
 
   <div class="controls">
+    <div class="presets">
+      <button type="button" class="calc-toggle" data-preset="today">This day</button>
+      <button type="button" class="calc-toggle" data-preset="week">Last 7 days</button>
+      <button type="button" class="calc-toggle" data-preset="lastmonth">Last month</button>
+      <button type="button" class="calc-toggle" data-preset="month">This month</button>
+    </div>
     <div>
       <label for="filterKind">Show</label>
       <select id="filterKind">
@@ -784,6 +799,24 @@ const CATEGORY_COLORS = {
 
 let records = [];
 let currentKind = 'expense';
+
+// Local-date helpers. valueAsDate / toISOString use UTC, which would stamp
+// anything logged between midnight and 8am (UTC+8) with yesterday's date.
+function pad2(n) { return String(n).padStart(2, '0'); }
+function localDateStr(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+function todayStr() { return localDateStr(new Date()); }
+
+// Last category used per kind, kept per device. A convenience only, never data.
+let lastCat = { expense: null, income: null };
+try {
+  const saved = JSON.parse(localStorage.getItem('ledgerLastCat') || '{}');
+  lastCat.expense = saved.expense || null;
+  lastCat.income = saved.income || null;
+} catch (e) { /* storage unavailable: fall back to first category */ }
+function rememberCategory(kind, cat) {
+  lastCat[kind] = cat;
+  try { localStorage.setItem('ledgerLastCat', JSON.stringify(lastCat)); } catch (e) {}
+}
 let visible = { income: false, expenses: false, totalnet: false }; // each starts hidden, independently, on every fresh load
 
 document.querySelectorAll('.eye-toggle-small').forEach(btn => {
@@ -843,7 +876,9 @@ function setKind(kind) {
   document.querySelectorAll('.kind-toggle button').forEach(b => {
     b.classList.toggle('active', b.dataset.kind === kind);
   });
-  populateCategoryOptions(categoryInput, kind === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+  const list = kind === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+  populateCategoryOptions(categoryInput, list);
+  if (lastCat[kind] && list.includes(lastCat[kind])) categoryInput.value = lastCat[kind];
   updateNoteFieldVisibility();
 }
 
@@ -915,6 +950,30 @@ showAllBtn.addEventListener('click', () => {
   filterTo.value = '';
   visibleCount = PAGE_SIZE;
   render();
+});
+
+document.querySelectorAll('[data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth();
+    let from, to;
+    if (btn.dataset.preset === 'today') {
+      from = to = localDateStr(now);
+    } else if (btn.dataset.preset === 'week') {
+      from = localDateStr(new Date(y, m, now.getDate() - 6));
+      to = localDateStr(now);
+    } else if (btn.dataset.preset === 'month') {
+      from = localDateStr(new Date(y, m, 1));
+      to = localDateStr(now);
+    } else if (btn.dataset.preset === 'lastmonth') {
+      from = localDateStr(new Date(y, m - 1, 1));
+      to = localDateStr(new Date(y, m, 0));
+    }
+    filterFrom.value = from;
+    filterTo.value = to;
+    visibleCount = PAGE_SIZE;
+    render();
+  });
 });
 
 let recordSeq = 0;
@@ -1011,8 +1070,15 @@ function render() {
     showMoreWrap.style.display = 'none';
   }
 
-  const totalIncome = records.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
-  const totalExpense = records.filter(r => r.kind === 'expense').reduce((s, r) => s + Number(r.amount), 0);
+  // Header tally covers the current month only.
+  const monthPrefix = todayStr().slice(0, 7);
+  const monthRecords = records.filter(r => String(r.date).startsWith(monthPrefix));
+  const monthName = new Date().toLocaleString('en-US', { month: 'short' });
+  document.getElementById('incomeLabel').textContent = 'Income · ' + monthName;
+  document.getElementById('expenseLabel').textContent = 'Expenses · ' + monthName;
+  document.getElementById('netLabel').textContent = 'Net · ' + monthName;
+  const totalIncome = monthRecords.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
+  const totalExpense = monthRecords.filter(r => r.kind === 'expense').reduce((s, r) => s + Number(r.amount), 0);
   document.getElementById('totalIncome').textContent = visible.income ? money(totalIncome) : '₱••••.••';
   document.getElementById('totalExpense').textContent = visible.expenses ? money(totalExpense) : '₱••••.••';
   document.getElementById('totalNet').textContent = visible.totalnet ? money(totalIncome - totalExpense) : '₱••••.••';
@@ -1063,22 +1129,28 @@ function renderBreakdown(filtered, kindFilter) {
 
   const rows = Object.values(groups).sort((a, b) => b.total - a.total);
   const maxTotal = rows[0].total;
+  const kindTotals = { income: 0, expense: 0 };
+  rows.forEach(g => { kindTotals[g.kind] += g.total; });
 
   content.innerHTML = rows.map(g => {
     const pct = maxTotal > 0 ? Math.round((g.total / maxTotal) * 100) : 0;
     const fillColor = g.kind === 'expense' && CATEGORY_COLORS[g.category] ? CATEGORY_COLORS[g.category] : null;
     const fillStyle = `width:${pct}%${fillColor ? `;background:${fillColor}` : ''}`;
+    const share = kindTotals[g.kind] > 0 ? (g.total / kindTotals[g.kind]) * 100 : 0;
+    const shareText = (share < 10 ? share.toFixed(1) : Math.round(share)) + '%';
     return `
       <div class="breakdown-row">
         <div class="breakdown-label">${escapeHtml(g.label)}</div>
         <div class="breakdown-track"><div class="breakdown-fill ${g.kind}" style="${fillStyle}"></div></div>
         <div class="breakdown-amount">${money(g.total)}</div>
+        <div class="breakdown-pct">${shareText}</div>
       </div>
     `;
   }).join('');
 }
 
 let editingRow = null; // null = add mode; a sheet row number = edit mode
+let editReturnY = null; // scroll position to go back to when an edit ends
 let editingOriginal = null; // the entry as it was when Edit was tapped (kind may be changed in the form)
 const editBannerText = document.getElementById('editBannerText');
 
@@ -1143,6 +1215,7 @@ function enterEditMode(record) {
   editBanner.classList.add('open');
   refreshEditUi();
   statusMsg.textContent = '';
+  if (editReturnY === null) editReturnY = window.scrollY;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1227,7 +1300,12 @@ function exitEditMode() {
   amountInput.value = '';
   statusMsg.textContent = '';
   setKind('expense');
-  dateInput.valueAsDate = new Date();
+  dateInput.value = todayStr();
+  if (editReturnY !== null) {
+    const y = editReturnY;
+    editReturnY = null;
+    setTimeout(() => window.scrollTo({ top: y, behavior: 'smooth' }), 0);
+  }
 }
 
 cancelEditBtn.addEventListener('click', exitEditMode);
@@ -1289,6 +1367,8 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
       statusMsg.textContent = 'Added.';
       amountInput.value = '';
       noteInput.value = '';
+      rememberCategory(currentKind, payload.category);
+      amountInput.focus();
       records.push({ row: data.row, kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category, addedAt: Date.now(), _seq: recordSeq++, note: payload.note });
     }
     render();
@@ -1395,7 +1475,19 @@ function evaluateCalcExpr(expr) {
   // doubled operator) rather than throwing mid-click.
   if (!/^[0-9.+\-*/%]+$/.test(expr)) return null;
   try {
-    const result = Function('"use strict"; return (' + expr.replace(/%/g, '/100*') + ')')();
+    // % is postfix. "200+10%" / "200-10%" mean 10% of the running total
+    // (220 / 180); anywhere else "n%" is just n/100 ("200*10%" = 20).
+    const toJs = e => e.replace(/([0-9.]+)%/g, '($1/100)');
+    const run = e => Function('"use strict"; return (' + e + ')')();
+    let result;
+    const tail = expr.match(/^(.+?)([+-])([0-9.]+)%$/);
+    if (tail) {
+      const left = run(toJs(tail[1]));
+      const pct = Number(tail[3]);
+      result = tail[2] === '+' ? left * (1 + pct / 100) : left * (1 - pct / 100);
+    } else {
+      result = run(toJs(expr));
+    }
     if (!isFinite(result)) return null;
     return String(Math.round(result * 100) / 100); // round off floating-point noise like 0.1+0.2
   } catch (err) {
@@ -1406,7 +1498,7 @@ function evaluateCalcExpr(expr) {
 document.querySelectorAll('[data-calc]').forEach(btn => {
   btn.addEventListener('click', () => {
     const key = btn.dataset.calc;
-    const isOperator = c => ['+', '-', '*', '/', '%'].includes(c);
+    const isOperator = c => ['+', '-', '*', '/'].includes(c);
 
     if (key === 'clear') {
       calcExpr = '';
@@ -1415,6 +1507,9 @@ document.querySelectorAll('[data-calc]').forEach(btn => {
     } else if (key === '=') {
       const result = evaluateCalcExpr(calcExpr);
       if (result !== null) calcExpr = result; // invalid expression (empty, trailing operator, etc) -> leave display as-is instead of crashing
+    } else if (key === '%') {
+      if (!/[0-9.]$/.test(calcExpr)) return; // % only follows a number
+      calcExpr += '%';
     } else if (isOperator(key)) {
       if (calcExpr === '') return; // no leading operator
       if (isOperator(calcExpr.slice(-1))) {
@@ -1423,6 +1518,7 @@ document.querySelectorAll('[data-calc]').forEach(btn => {
         calcExpr += key;
       }
     } else {
+      if (calcExpr.slice(-1) === '%') return; // a digit can't directly follow %
       calcExpr += key;
     }
     calcDisplay.textContent = calcExpr || '0';
@@ -1471,7 +1567,7 @@ document.addEventListener('keydown', (e) => {
   document.querySelector(`[data-calc="${action}"]`)?.click();
 });
 
-dateInput.valueAsDate = new Date();
+dateInput.value = todayStr();
 setKind('expense');
 populateFilterCategories();
 
