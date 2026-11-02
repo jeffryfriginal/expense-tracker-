@@ -625,17 +625,17 @@
 
   <div class="tally">
     <div class="tally-item">
-      <div class="tally-label" id="incomeLabel">Income</div>
+      <div class="tally-label">Income</div>
       <div class="tally-value income" id="totalIncome">₱0.00</div>
       <button type="button" class="eye-toggle-small" data-target="income" title="Show">👁</button>
     </div>
     <div class="tally-item">
-      <div class="tally-label" id="expenseLabel">Expenses</div>
+      <div class="tally-label">Expenses</div>
       <div class="tally-value expense" id="totalExpense">₱0.00</div>
       <button type="button" class="eye-toggle-small" data-target="expenses" title="Show">👁</button>
     </div>
     <div class="tally-item">
-      <div class="tally-label" id="netLabel">Net</div>
+      <div class="tally-label">Net</div>
       <div class="tally-value" id="totalNet">₱0.00</div>
       <button type="button" class="eye-toggle-small" data-target="totalnet" title="Show">👁</button>
     </div>
@@ -1070,15 +1070,9 @@ function render() {
     showMoreWrap.style.display = 'none';
   }
 
-  // Header tally covers the current month only.
-  const monthPrefix = todayStr().slice(0, 7);
-  const monthRecords = records.filter(r => String(r.date).startsWith(monthPrefix));
-  const monthName = new Date().toLocaleString('en-US', { month: 'short' });
-  document.getElementById('incomeLabel').textContent = 'Income · ' + monthName;
-  document.getElementById('expenseLabel').textContent = 'Expenses · ' + monthName;
-  document.getElementById('netLabel').textContent = 'Net · ' + monthName;
-  const totalIncome = monthRecords.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
-  const totalExpense = monthRecords.filter(r => r.kind === 'expense').reduce((s, r) => s + Number(r.amount), 0);
+  // Header tally covers every entry, all time.
+  const totalIncome = records.filter(r => r.kind === 'income').reduce((s, r) => s + Number(r.amount), 0);
+  const totalExpense = records.filter(r => r.kind === 'expense').reduce((s, r) => s + Number(r.amount), 0);
   document.getElementById('totalIncome').textContent = visible.income ? money(totalIncome) : '₱••••.••';
   document.getElementById('totalExpense').textContent = visible.expenses ? money(totalExpense) : '₱••••.••';
   document.getElementById('totalNet').textContent = visible.totalnet ? money(totalIncome - totalExpense) : '₱••••.••';
