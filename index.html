@@ -223,15 +223,6 @@
   }
   .add-btn:disabled { opacity: 0.5; cursor: default; }
 
-  .amount-preview {
-    text-transform: none;
-    letter-spacing: 0;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
-    color: var(--income);
-    margin-left: 8px;
-  }
-
   .status-msg {
     font-size: 12px;
     margin-top: 10px;
@@ -700,8 +691,8 @@
         <input type="date" id="dateInput" required>
       </div>
       <div>
-        <label for="amountInput">Amount (₱)<span class="amount-preview" id="amountPreview"></span></label>
-        <input type="text" inputmode="text" autocomplete="off" id="amountInput" placeholder="0.00" required>
+        <label for="amountInput">Amount (₱)</label>
+        <input type="number" id="amountInput" step="0.01" min="0" placeholder="0.00" required>
       </div>
       <div>
         <label for="categoryInput">Category</label>
@@ -855,62 +846,6 @@ const filterTo = document.getElementById('filterTo');
 const showAllBtn = document.getElementById('showAllBtn');
 const recordsBody = document.getElementById('recordsBody');
 const configWarning = document.getElementById('configWarning');
-
-// ---- Excel-style amount: type a number, or "=" followed by a formula ----
-// "=120+45*2" works like a spreadsheet cell: + - * / ( ) and % (n% = n/100).
-// Returns a number rounded to 2 decimals, or null if it isn't a valid,
-// non-negative amount. Only digits and operators pass the check, so nothing
-// else can ever reach Function().
-function resolveAmount(raw) {
-  const t = String(raw == null ? '' : raw).replace(/[\s,]/g, '');
-  if (t === '') return null;
-  if (t[0] === '=') {
-    const expr = t.slice(1).replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-');
-    if (!expr || !/^[0-9.+\-*/()%]+$/.test(expr)) return null;
-    try {
-      const result = Function('"use strict"; return (' + expr.replace(/([0-9.]+)%/g, '($1/100)') + ')')();
-      if (typeof result !== 'number' || !isFinite(result) || result < 0) return null;
-      return Math.round(result * 100) / 100;
-    } catch (e) {
-      return null;
-    }
-  }
-  if (!/^(\d+\.?\d*|\.\d+)$/.test(t)) return null;
-  return Math.round(Number(t) * 100) / 100;
-}
-
-const amountPreview = document.getElementById('amountPreview');
-
-// Shows the live result next to the label while a formula is typed.
-function refreshAmountPreview() {
-  const v = amountInput.value.trim();
-  const r = v.startsWith('=') ? resolveAmount(v) : null;
-  amountPreview.textContent = r === null ? '' : '= ' + r;
-}
-
-// Replaces a formula in the box with its result.
-function commitAmountFormula() {
-  const v = amountInput.value.trim();
-  if (!v.startsWith('=')) return;
-  const r = resolveAmount(v);
-  if (r === null) {
-    statusMsg.textContent = "Can't calculate that. Check the formula.";
-    return;
-  }
-  amountInput.value = String(r);
-  refreshAmountPreview();
-  statusMsg.textContent = '';
-}
-
-amountInput.addEventListener('input', refreshAmountPreview);
-amountInput.addEventListener('blur', commitAmountFormula);
-amountInput.addEventListener('keydown', (e) => {
-  // Enter on a formula commits it (like Excel) instead of submitting the form.
-  if (e.key === 'Enter' && amountInput.value.trim().startsWith('=')) {
-    e.preventDefault();
-    commitAmountFormula();
-  }
-});
 
 function updateNoteFieldVisibility() {
   const show = currentKind === 'expense' && categoryInput.value === 'Other';
@@ -1265,7 +1200,6 @@ function enterEditMode(record) {
   populateCategoryOptions(categoryInput, record.kind === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
   dateInput.value = record.date;
   amountInput.value = record.amount;
-  refreshAmountPreview();
   categoryInput.value = record.category;
 
   // Programmatically setting a <select>'s value doesn't fire 'change',
@@ -1361,7 +1295,6 @@ function exitEditMode() {
   editBanner.classList.remove('open');
   submitBtn.textContent = 'Add entry';
   amountInput.value = '';
-  refreshAmountPreview();
   statusMsg.textContent = '';
   setKind('expense');
   dateInput.value = todayStr();
@@ -1377,14 +1310,6 @@ cancelEditBtn.addEventListener('click', exitEditMode);
 document.getElementById('entryForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!checkConfig()) return;
-
-  const resolvedAmount = resolveAmount(amountInput.value);
-  if (resolvedAmount === null) {
-    statusMsg.textContent = "Amount isn't valid.";
-    return;
-  }
-  amountInput.value = String(resolvedAmount);
-  refreshAmountPreview();
 
   submitBtn.disabled = true;
   submitBtn.textContent = editingRow ? 'Saving…' : 'Adding…';
@@ -1438,7 +1363,6 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
     } else {
       statusMsg.textContent = 'Added.';
       amountInput.value = '';
-      refreshAmountPreview();
       noteInput.value = '';
       rememberCategory(currentKind, payload.category);
       amountInput.focus();
@@ -1646,7 +1570,6 @@ document.getElementById('calcUseBtn').addEventListener('click', () => {
   const result = evaluateCalcExpr(calcExpr);
   if (result !== null) {
     amountInput.value = result;
-    refreshAmountPreview();
     calcExpr = '';
     calcDisplay.textContent = '0';
     calcPanel.classList.remove('open');
