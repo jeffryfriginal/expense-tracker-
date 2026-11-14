@@ -450,6 +450,17 @@
   .income-row:hover td { background: #9DC77F; }
   .income-row .edit-btn { background: var(--paper); }
 
+  /* Flash on the entry that was just saved. There is no 100% keyframe on
+     purpose: the animation fades back into whatever the cell's own background
+     is, so expense rows and the green income rows both land correctly. */
+  @keyframes entryFlash {
+    0%, 45% {
+      background-color: #FFD84D;
+      box-shadow: inset 0 2px 0 #C99700, inset 0 -2px 0 #C99700;
+    }
+  }
+  tr.just-edited td { animation: entryFlash 3s ease-out; }
+
   .amount.expense { color: var(--expense); }
   .amount.income { color: var(--income); }
 
@@ -1026,13 +1037,15 @@ async function loadRecords(password) {
 const PAGE_SIZE = 20;
 let visibleCount = PAGE_SIZE;
 
-function render() {
+// The filtered, sorted list the table is drawn from. Pulled out of render()
+// so highlightEntry() can ask "where does this record sit in the list?"
+function getFiltered() {
   const kindFilter = filterKind.value;
   const catFilter = filterCategory.value;
   const fromFilter = filterFrom.value;
   const toFilter = filterTo.value;
 
-  let filtered = records.filter(r => {
+  const filtered = records.filter(r => {
     if (kindFilter !== 'all' && r.kind !== kindFilter) return false;
     if (catFilter !== 'all' && r.category !== catFilter) return false;
     if (fromFilter && r.date < fromFilter) return false;
@@ -1048,13 +1061,24 @@ function render() {
     return (b._seq || 0) - (a._seq || 0); // fallback only for legacy rows with no real timestamp on either side
   });
 
+  return filtered;
+}
+
+function render() {
+  const kindFilter = filterKind.value;
+  const catFilter = filterCategory.value;
+  const fromFilter = filterFrom.value;
+  const toFilter = filterTo.value;
+
+  const filtered = getFiltered();
+
   const toShow = filtered.slice(0, visibleCount);
 
   if (toShow.length === 0) {
     recordsBody.innerHTML = '<tr class="empty-row"><td colspan="5">No entries match this filter.</td></tr>';
   } else {
     recordsBody.innerHTML = toShow.map(r => `
-      <tr class="${r.kind === 'income' ? 'income-row' : ''}">
+      <tr class="${r.kind === 'income' ? 'income-row' : ''}" data-row="${r.row}" data-kind="${r.kind}">
         <td>${r.date}</td>
         <td><span class="badge ${r.kind}">${r.kind}</span></td>
         <td>${r.kind === 'expense' && CATEGORY_COLORS[r.category] ? `<span class="cat-box" style="background:${CATEGORY_COLORS[r.category]}">${r.category}</span>` : r.category}${r.note ? `<div class="row-note">${escapeHtml(r.note)}</div>` : ''}</td>
@@ -1098,6 +1122,52 @@ function render() {
   }
 
   renderBreakdown(filtered, kindFilter);
+}
+
+// Scrolls to a record and flashes it for 3 seconds. Returns true if the row
+// is on screen, false if the current filters hide it (nothing is changed then,
+// so the caller can say so). If the row sits past the "Show more" cutoff, the
+// list is extended just far enough to include it.
+let highlightTimer = null;
+function highlightEntry(rec) {
+  clearTimeout(highlightTimer);
+  document.querySelectorAll('tr.just-edited').forEach(el => el.classList.remove('just-edited'));
+  if (!rec) return false;
+
+  const idx = getFiltered().indexOf(rec);
+  if (idx === -1) return false;
+
+  if (idx >= visibleCount) {
+    visibleCount = Math.ceil((idx + 1) / PAGE_SIZE) * PAGE_SIZE;
+    render();
+  }
+
+  const tr = recordsBody.querySelector(`tr[data-row="${rec.row}"][data-kind="${rec.kind}"]`);
+  if (!tr) return false;
+
+  tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  tr.classList.add('just-edited');
+  highlightTimer = setTimeout(() => tr.classList.remove('just-edited'), 3000);
+  return true;
+}
+
+// After a convert the sheet rows are renumbered, so the moved entry is found
+// by its values in the destination list. If identical entries exist, the one
+// with the highest row wins (moved entries land at the end of the list).
+function findMovedRecord(p) {
+  const matches = records.filter(r =>
+    r.kind === p.toKind &&
+    r.date === p.date &&
+    Number(r.amount) === Number(p.amount) &&
+    r.category === p.category
+  );
+  if (matches.length === 0) return null;
+  return matches.reduce((a, b) => (b.row > a.row ? b : a));
+}
+
+function restoreScrollTo(y) {
+  if (y === null || y === undefined) return;
+  setTimeout(() => window.scrollTo({ top: y, behavior: 'smooth' }), 0);
 }
 
 const breakdownToggle = document.getElementById('breakdownToggle');
@@ -1288,7 +1358,11 @@ deleteEntryBtn.addEventListener('click', async () => {
   }
 });
 
-function exitEditMode() {
+// Leaves edit mode and resets the form. By default it also scrolls back to
+// where the page was when Edit was tapped. Pass false to skip that (the save
+// paths do, because they scroll to the edited row instead). Returns the saved
+// scroll position so a caller can still restore it if it needs to.
+function exitEditMode(restoreScroll = true) {
   resetDeleteBtn();
   editingRow = null;
   editingOriginal = null;
@@ -1298,18 +1372,20 @@ function exitEditMode() {
   statusMsg.textContent = '';
   setKind('expense');
   dateInput.value = todayStr();
-  if (editReturnY !== null) {
-    const y = editReturnY;
-    editReturnY = null;
-    setTimeout(() => window.scrollTo({ top: y, behavior: 'smooth' }), 0);
-  }
+  const y = editReturnY;
+  editReturnY = null;
+  if (restoreScroll) restoreScrollTo(y);
+  return y;
 }
 
-cancelEditBtn.addEventListener('click', exitEditMode);
+cancelEditBtn.addEventListener('click', () => exitEditMode());
 
 document.getElementById('entryForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!checkConfig()) return;
+
+  // Drop focus so the on-screen keyboard closes on save and stays closed.
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 
   submitBtn.disabled = true;
   submitBtn.textContent = editingRow ? 'Saving…' : 'Adding…';
@@ -1337,15 +1413,19 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
 
     if (moving) {
       // Rows in both lists may have been renumbered, so reload instead of patching locally.
-      const toLabel = currentKind === 'income' ? 'Income' : 'Expenses';
+      const toLabel = payload.toKind === 'income' ? 'Income' : 'Expenses';
       const note = data.shifted === false && payload.kind === 'expense'
         ? ' A blank row was left in the expense list because income entries share those rows.' : '';
-      exitEditMode();
+      const returnY = exitEditMode(false);
       try {
         await loadRecords(sessionPassword);
-        statusMsg.textContent = 'Moved to ' + toLabel + '.' + note;
+        const shown = highlightEntry(findMovedRecord(payload));
+        statusMsg.textContent = 'Moved to ' + toLabel + '.' + note +
+          (shown ? '' : ' It may be hidden by the current filters.');
+        if (!shown) restoreScrollTo(returnY);
       } catch (reloadErr) {
         statusMsg.textContent = "Moved, but couldn't refresh the list. Reload the page before editing anything else.";
+        restoreScrollTo(returnY);
       }
       return;
     }
@@ -1358,16 +1438,21 @@ document.getElementById('entryForm').addEventListener('submit', async (e) => {
         target.category = payload.category;
         target.note = payload.note;
       }
-      statusMsg.textContent = 'Saved.';
-      exitEditMode();
-    } else {
-      statusMsg.textContent = 'Added.';
-      amountInput.value = '';
-      noteInput.value = '';
-      rememberCategory(currentKind, payload.category);
-      amountInput.focus();
-      records.push({ row: data.row, kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category, addedAt: Date.now(), _seq: recordSeq++, note: payload.note });
+      const returnY = exitEditMode(false);
+      render();
+      const shown = highlightEntry(target);
+      statusMsg.textContent = shown
+        ? 'Saved.'
+        : 'Saved, but the current filters hide this entry.';
+      if (!shown) restoreScrollTo(returnY);
+      return;
     }
+
+    statusMsg.textContent = 'Added.';
+    amountInput.value = '';
+    noteInput.value = '';
+    rememberCategory(currentKind, payload.category);
+    records.push({ row: data.row, kind: currentKind, date: payload.date, amount: Number(payload.amount), category: payload.category, addedAt: Date.now(), _seq: recordSeq++, note: payload.note });
     render();
   } catch (err) {
     if (err.kind === 'network') {
